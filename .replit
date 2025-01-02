@@ -1,0 +1,16 @@
+run = ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:5000", "main:app"]
+entrypoint = "main.py"
+modules = ["python-3.10"]
+
+hidden = [".pythonlibs"]
+
+[nix]
+channel = "stable-23_05"
+
+[deployment]
+deploymentTarget = "static"
+publicDir = "/"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
