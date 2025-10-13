@@ -8,12 +8,17 @@ hidden = [".pythonlibs"]
 channel = "stable-23_05"
 
 [deployment]
-deploymentTarget = "static"
+deploymentTarget = "autoscale"
 publicDir = "/"
+run = ["gunicorn", "--bind=0.0.0.0:5000", "--reuse-port", "main:app"]
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 39067
+externalPort = 3000
 
 [agent]
 expertMode = true
