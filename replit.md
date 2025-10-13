@@ -1,120 +1,105 @@
-# Interactive Network Graph Visualization
+# Overview
 
-## Overview
+An interactive network graph visualization application that displays complex relationships between nodes using D3.js force-directed layouts. Built with Flask, NetworkX, and Gravis, the application renders a cyberpunk-themed visualization with two node types: graphic nodes (visual content with social media links) positioned in the center, and keyword nodes positioned on an outer circular radius. The system has been refactored to follow DRY principles, achieving 87% code reduction by externalizing all data to JSON files.
 
-This is a Flask-based web application that creates an interactive D3.js network graph visualization to display relationships between nodes and concepts. The application uses NetworkX for graph structure and Gravis for D3.js rendering, featuring a cyberpunk-themed interface with force-directed layout. The project has been heavily refactored to follow DRY principles, achieving an 87% code reduction by externalizing all data to JSON files.
-
-## User Preferences
+# User Preferences
 
 Preferred communication style: Simple, everyday language.
 
-## System Architecture
+# System Architecture
 
-### Application Structure
+## Application Structure
 
-**Backend Framework**: Flask 3.0.0+ web application
-- Single-route application serving a pre-generated static HTML graph
-- Graph generation happens on first request and is cached
-- Cache control headers prevent browser caching issues
-- Logging configured for monitoring and debugging
+**Problem**: Need a maintainable, data-driven web application for visualizing network graphs
+**Solution**: Flask-based web server with externalized data architecture
+**Rationale**: Separates data from code, making updates possible without modifying application logic
 
-**Graph Generation Pipeline**:
-1. Load node and edge data from JSON files
-2. Load visualization configuration from JSON
-3. Build NetworkX directed graph structure
-4. Calculate node positions (keyword nodes on outer circle, graphic nodes in center)
-5. Generate interactive D3.js visualization using Gravis
-6. Save to static HTML template
-7. Serve with proper cache control headers
+### Core Components
 
-**Data-Driven Architecture**:
-- All graph data externalized to `data/` directory
-- Node definitions in `nodes.json` (133 nodes)
-- Edge relationships in `edges.json` (235 active edges)
-- Commented/disabled edges in separate file for optional restoration
-- Visualization settings in `config/graph_config.json`
-- No hardcoded data in Python code - pure data separation
+1. **Web Framework**: Flask 3.0.0+
+   - Single route (`/`) serves the visualization
+   - Static file serving for generated HTML
+   - Cache control headers to ensure fresh content
 
-### Node Architecture
+2. **Graph Generation Pipeline**:
+   - **NetworkX**: Creates directed graph structure from node/edge data
+   - **Gravis 0.1.0**: Renders interactive D3.js visualization
+   - **Caching Strategy**: Graph generated once per session, cached to avoid regeneration on each request
 
-**Two Node Types**:
+3. **Data Layer** (Externalized):
+   - `data/nodes.json`: 133 nodes with metadata (graphic labels, URLs, X/Twitter post links)
+   - `data/edges.json`: 235 active edges defining relationships
+   - `data/edges_keyword_circular_commented.json`: 16 disabled circular edges (for optional features)
+   - `config/graph_config.json`: Visualization settings (colors, positions, force parameters)
 
-1. **Graphic Nodes** (Visual content):
-   - Center-positioned using circular layout
-   - Contains image thumbnails
-   - Links to X (Twitter) posts and images
-   - Properties: graphicLabel, graphicName, xPostURL, xGraphicURL
+## Data Architecture
 
-2. **Keyword Nodes** (Conceptual):
-   - Positioned on outer circle
-   - Larger radius for visual separation
-   - Prefixed with "kw-" identifier
-   - Purple colored for distinction
+**Problem**: Original 3,108-line monolith with hardcoded data was unmaintainable
+**Solution**: Complete data externalization to JSON files
+**Results**: 
+- Reduced to 426 lines (87% reduction)
+- Zero code changes needed for data updates
+- Clear separation between application logic and content
 
-### Positioning System
+### Node Structure
+Two node types with distinct positioning:
+- **Graphic Nodes**: Visual content with image thumbnails, social media links, positioned at radius 360 (center cluster)
+- **Keyword Nodes**: Conceptual nodes prefixed with "kw-", positioned at radius 1177.1 (outer circle)
 
-**Circular Layout Algorithm**:
-- Keyword nodes: Positioned on outer circle (radius: 1177.1)
-- Graphic nodes: Positioned on inner circle (radius: 360.0)
-- Automatic angle calculation based on node count
-- Position caching with `@lru_cache` for performance
+### Position Calculation
+- Keyword nodes: Circular layout using trigonometry (evenly distributed)
+- Graphic nodes: Staggered intervals (every 5 degrees) for visual separation
+- Coordinates calculated using configurable radius values
 
-### Frontend Visualization
+## Visualization Configuration
 
-**D3.js Force Simulation**:
-- Many-body force for node repulsion (strength: -1776.0)
-- Link force for edge connections (distance: 107.0)
-- Collision force to prevent overlap (radius: 100.0)
-- Custom positioning forces (x: 0.07, y: 0.1)
-- Edge curvature for visual clarity (0.11)
+**Problem**: Need fine-tuned control over graph appearance and physics
+**Solution**: Comprehensive JSON configuration for all visual parameters
 
-**Visual Theme**:
-- Background: Black (#000000)
-- Keyword nodes: Purple
-- Edges: Green with low opacity (0.1)
-- Image thumbnails for graphic nodes
-- Hover interactions with neighborhood highlighting
+### Key Configuration Areas:
+1. **Colors**: Background (#000000 black), highlight (green), default node colors
+2. **Force Simulation**: 
+   - Many-body force strength: -1776.0 (repulsion)
+   - Link force distance: 107.0
+   - Collision radius: 100.0
+3. **Layout**: Graph height (1100px), zoom factor (0.5), edge curvature (0.11)
+4. **Node/Edge Styling**: Opacity, size factors, label sizes
 
-### Performance Optimizations
+## Code Organization
 
-**Caching Strategy**:
-- Graph HTML generated once and cached
-- Position calculations cached with `@lru_cache`
-- Only regenerates when needed (first request or forced)
-- HTTP cache control headers for fresh delivery
+### Main Application (`main.py`)
+- JSON file loading utilities with error handling
+- Position calculation functions (circular layout for keywords)
+- Graph construction from data files
+- Flask routes with cache control
 
-**Code Organization**:
-- Original: 3,108 lines in single file
-- Refactored: 426 lines (87% reduction)
-- Modular functions for data loading, position calculation, graph building
-- Clear separation between data, config, and logic
+### Backup & History
+- `main_old_backup.py`: Original 3,108-line version preserved for reference
+- Demonstrates evolution from monolithic to modular architecture
 
-## External Dependencies
+# External Dependencies
 
-### Python Libraries
-- **Flask 3.0.0+**: Web framework for serving the application
+## Python Packages
+- **Flask 3.0.0+**: Web framework for serving visualization
 - **NetworkX 3.3**: Graph data structure and algorithms
-- **Gravis 0.1.0**: D3.js graph visualization generator
-- **Gunicorn 21.2.0+**: Production WSGI server
+- **Gravis 0.1.0**: D3.js graph rendering library
+- **Gunicorn 21.2.0+**: WSGI HTTP server for production deployment
 
-### Frontend Libraries (via Gravis)
-- **D3.js**: Force-directed graph layout and rendering
-- Embedded in generated HTML, no separate CDN dependencies
+## Data Storage
+- **File-based JSON**: All data stored in local JSON files
+- No database system currently implemented
+- Data files serve as the single source of truth
 
-### Data Storage
-- **JSON files**: Primary data storage format
-  - `nodes.json`: Node definitions
-  - `edges.json`: Active edge relationships
-  - `edges_keyword_circular_commented.json`: Disabled edges
-  - `graph_config.json`: Visualization parameters
-- No database required - file-based data persistence
+## Frontend Technologies (via Gravis)
+- **D3.js**: Force-directed graph layout and interactive visualization
+- Embedded in generated HTML template
 
-### Deployment
+## Deployment
 - **Poetry**: Dependency management (pyproject.toml, poetry.lock)
 - **Procfile**: Deployment configuration for platforms like Heroku/Replit
-- Static file serving via Flask's send_from_directory
+- Static file serving from Flask (templates/index.html generated at 616KB)
 
-### Development Tools
-- Python logging module for application monitoring
-- Path and pathlib for cross-platform file handling
-- JSON module for data serialization
+## Third-Party Integrations
+- **X/Twitter**: Node metadata includes X post URLs and image URLs (pbs.twimg.com)
+- Links embedded in node data for external content references
+- No API integration, only hyperlinks to social media content
