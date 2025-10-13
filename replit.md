@@ -1,6 +1,8 @@
 # Overview
 
-An interactive network graph visualization application that displays complex relationships between nodes using D3.js force-directed layouts. Built with Flask, NetworkX, and Gravis, the application renders a cyberpunk-themed visualization with two node types: graphic nodes (visual content with social media links) positioned in the center, and keyword nodes positioned on an outer circular radius. The system has been refactored to follow DRY principles, achieving 87% code reduction by externalizing all data to JSON files.
+This is an Interactive Network Graph Visualization application that visualizes complex relationships between nodes using D3.js force-directed graphs. Built with Flask, NetworkX, and Gravis, it creates a cyberpunk-themed network visualization with two types of nodes: graphic nodes (visual content with linked images) positioned in the center, and keyword nodes positioned on an outer circle, connected by labeled edges.
+
+The application has undergone significant refactoring, achieving an 87% code reduction by externalizing all data to JSON files and following DRY principles. The graph displays 133 nodes connected by 235 active edges, with an additional 16 commented keyword circular edges available for activation.
 
 # User Preferences
 
@@ -10,96 +12,79 @@ Preferred communication style: Simple, everyday language.
 
 ## Application Structure
 
-**Problem**: Need a maintainable, data-driven web application for visualizing network graphs
-**Solution**: Flask-based web server with externalized data architecture
-**Rationale**: Separates data from code, making updates possible without modifying application logic
+**Monolithic Flask Application**: The system uses a single Flask application (`main.py`, 426 lines) that serves as both the web server and graph generation engine. A backup of the original monolithic implementation exists (`main_old_backup.py`, 3,108 lines) showing the evolution from hardcoded data to data-driven architecture.
 
-### Core Components
+**Data-Driven Architecture**: All node and edge data has been externalized from code into JSON files in the `data/` directory. This separation allows for easy updates to the graph content without modifying the application code. Configuration settings for visualization (colors, positions, force parameters) are stored in `config/graph_config.json`.
 
-1. **Web Framework**: Flask 3.0.0+
-   - Single route (`/`) serves the visualization
-   - Static file serving for generated HTML
-   - Cache control headers to ensure fresh content
+**Caching Strategy**: The application implements graph caching to avoid regenerating the visualization on every request. The graph HTML is generated once and cached in `templates/index.html` (616KB), with cache control headers ensuring browsers receive fresh content when needed.
 
-2. **Graph Generation Pipeline**:
-   - **NetworkX**: Creates directed graph structure from node/edge data
-   - **Gravis 0.1.0**: Renders interactive D3.js visualization
-   - **Caching Strategy**: Graph generated once per session, cached to avoid regeneration on each request
+## Graph Generation Pipeline
 
-3. **Data Layer** (Externalized):
-   - `data/nodes.json`: 133 nodes with metadata (graphic labels, URLs, X/Twitter post links)
-   - `data/edges.json`: 235 active edges defining relationships
-   - `data/edges_keyword_circular_commented.json`: 16 disabled circular edges (for optional features)
-   - `config/graph_config.json`: Visualization settings (colors, positions, force parameters)
+**NetworkX Graph Building**: The application loads nodes and edges from JSON files, then constructs a directed NetworkX graph. Each node type (graphic vs keyword) receives specific positioning based on configuration parameters.
 
-## Data Architecture
+**Positioning Algorithm**: 
+- **Keyword nodes**: Positioned on an outer circle with radius 1177.1 units, evenly distributed
+- **Graphic nodes**: Positioned in center area with radius 360.0 units, with 5-unit intervals
+- Positions are calculated using trigonometric functions and cached using `@lru_cache` decorator
 
-**Problem**: Original 3,108-line monolith with hardcoded data was unmaintainable
-**Solution**: Complete data externalization to JSON files
-**Results**: 
-- Reduced to 426 lines (87% reduction)
-- Zero code changes needed for data updates
-- Clear separation between application logic and content
+**D3.js Rendering via Gravis**: The NetworkX graph is converted to an interactive D3.js visualization using the Gravis library. Force simulation parameters (many-body force, collision force, link force) are configurable through JSON to fine-tune the visual layout.
 
-### Node Structure
-Two node types with distinct positioning:
-- **Graphic Nodes**: Visual content with image thumbnails, social media links, positioned at radius 360 (center cluster)
-- **Keyword Nodes**: Conceptual nodes prefixed with "kw-", positioned at radius 1177.1 (outer circle)
+## Node and Edge Data Model
 
-### Position Calculation
-- Keyword nodes: Circular layout using trigonometry (evenly distributed)
-- Graphic nodes: Staggered intervals (every 5 degrees) for visual separation
-- Coordinates calculated using configurable radius values
+**Two Node Types**:
+1. **Graphic Nodes**: Visual content nodes with properties:
+   - `graphicLabel`: Display text
+   - `graphicName`: Unique identifier
+   - `xPostURL`: Social media post link
+   - `xGraphicURL`: Thumbnail image URL
 
-## Visualization Configuration
+2. **Keyword Nodes**: Conceptual nodes with prefix "kw-" in their identifiers, positioned on outer circle
 
-**Problem**: Need fine-tuned control over graph appearance and physics
-**Solution**: Comprehensive JSON configuration for all visual parameters
+**Edge Structure**: Each edge contains:
+- `source`: Origin node identifier
+- `target`: Destination node identifier  
+- `label`: Relationship description/context
 
-### Key Configuration Areas:
-1. **Colors**: Background (#000000 black), highlight (green), default node colors
-2. **Force Simulation**: 
-   - Many-body force strength: -1776.0 (repulsion)
-   - Link force distance: 107.0
-   - Collision radius: 100.0
-3. **Layout**: Graph height (1100px), zoom factor (0.5), edge curvature (0.11)
-4. **Node/Edge Styling**: Opacity, size factors, label sizes
+**Edge Management**: Active edges (235) are in `edges.json`, while disabled keyword circular edges (16) are preserved in `edges_keyword_circular_commented.json` for potential reactivation.
 
-## Code Organization
+## Deployment Configuration
 
-### Main Application (`main.py`)
-- JSON file loading utilities with error handling
-- Position calculation functions (circular layout for keywords)
-- Graph construction from data files
-- Flask routes with cache control
+**Poetry Dependency Management**: The project uses Poetry for Python dependency management with locked versions in `poetry.lock`. Core dependencies are Flask 3.0+, NetworkX 3.3, Gravis 0.1.0, and Gunicorn 21.2+ for production serving.
 
-### Backup & History
-- `main_old_backup.py`: Original 3,108-line version preserved for reference
-- Demonstrates evolution from monolithic to modular architecture
+**Production Server**: Configured to use Gunicorn WSGI server via `Procfile` for deployment on platforms like Replit or Heroku.
+
+**Python Version**: Requires Python 3.10 or 3.11 for compatibility with dependencies.
 
 # External Dependencies
 
-## Python Packages
-- **Flask 3.0.0+**: Web framework for serving visualization
-- **NetworkX 3.3**: Graph data structure and algorithms
-- **Gravis 0.1.0**: D3.js graph rendering library
-- **Gunicorn 21.2.0+**: WSGI HTTP server for production deployment
+## Python Libraries
+
+**Flask 3.0.0+**: Web framework providing the HTTP server and routing for serving the visualization page.
+
+**NetworkX 3.3**: Graph theory library used for constructing and managing the directed graph data structure before visualization.
+
+**Gravis 0.1.0**: Visualization library that converts NetworkX graphs into interactive D3.js force-directed layouts with customizable parameters.
+
+**Gunicorn 21.2.0+**: Production-grade WSGI HTTP server for serving the Flask application in deployment environments.
+
+## Frontend Libraries (Embedded)
+
+**D3.js**: JavaScript library for interactive graph visualization, embedded in the generated HTML template via Gravis.
+
+## External Services
+
+**Twitter/X Image Hosting**: Graphic nodes reference images hosted on Twitter's CDN (`pbs.twimg.com`) for thumbnail display in the visualization.
+
+**Twitter/X Post Links**: Each graphic node links to social media posts on x.com (formerly Twitter) for context and source material.
 
 ## Data Storage
-- **File-based JSON**: All data stored in local JSON files
-- No database system currently implemented
-- Data files serve as the single source of truth
 
-## Frontend Technologies (via Gravis)
-- **D3.js**: Force-directed graph layout and interactive visualization
-- Embedded in generated HTML template
+**File-based JSON Storage**: All application data stored in local JSON files:
+- `data/nodes.json`: 133 nodes (33KB)
+- `data/edges.json`: 235 active edges (24KB)
+- `data/edges_keyword_circular_commented.json`: 16 disabled edges
+- `config/graph_config.json`: Visualization configuration
 
-## Deployment
-- **Poetry**: Dependency management (pyproject.toml, poetry.lock)
-- **Procfile**: Deployment configuration for platforms like Heroku/Replit
-- Static file serving from Flask (templates/index.html generated at 616KB)
+**Static HTML Cache**: Generated graph visualization cached in `templates/index.html` (616KB) to improve performance.
 
-## Third-Party Integrations
-- **X/Twitter**: Node metadata includes X post URLs and image URLs (pbs.twimg.com)
-- Links embedded in node data for external content references
-- No API integration, only hyperlinks to social media content
+**No Database Required**: The application operates entirely on file-based storage without requiring PostgreSQL, MongoDB, or any other database system.
