@@ -18,10 +18,15 @@ build/
 *.swo
 *~
 
-# Project specific
+# Project specific - generated files
 templates/index.html
 index.html
 *.log
+
+# Project specific - backups and temps
+templates/index_orig.html
+attached_assets/
+images/
 
 # OS
 .DS_Store

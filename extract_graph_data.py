@@ -35,7 +35,7 @@ def extract_nodes_from_main():
         post_match = re.search(r'"xPostURL":\s*"([^"]*)"', node_text)
         graphic_match = re.search(r'"xGraphicURL":\s*"([^"]*)"', node_text)
         
-        if all([label_match, name_match, post_match, graphic_match]):
+        if label_match and name_match and post_match and graphic_match:
             nodes.append({
                 "graphicLabel": label_match.group(1),
                 "graphicName": name_match.group(1),
