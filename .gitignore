@@ -26,6 +26,7 @@ index.html
 # Project specific - backups and temps
 templates/index_orig.html
 attached_assets/
+screenshots/
 images/
 
 # OS
