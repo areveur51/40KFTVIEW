@@ -6,6 +6,12 @@ This is a Flask-based web application that creates interactive network graph vis
 
 ## Recent Changes (October 2025)
 
+- **MAJOR REFACTORING - Applied DRY principles**: Reduced codebase from 3,109 to 399 lines (87% reduction)
+  - Extracted all node data to `data/nodes.json` (133 nodes)
+  - Extracted all edge data to `data/edges.json` (251 edges)
+  - Eliminated data duplication by loading from JSON files
+  - Created modular, reusable functions for better maintainability
+  - Backed up original code to `main_old_backup.py`
 - **Fixed broken links**: Removed 2 edges that referenced non-existent nodes (virusorelection→thefirstwilsendashockwave, kw-FISA→declasoffisa)
 - **Created data consistency test suite**: Automated tests to verify all edges reference valid nodes
 - **Added comprehensive documentation**: Full docstrings for all functions following Google style guide
@@ -45,18 +51,32 @@ Preferred communication style: Simple, everyday language.
 
 **Core Components**:
 
-1. **Graph Generation System** (`main.py`)
+1. **Graph Generation System** (`main.py` - Refactored to 399 lines)
+   - **Data-driven architecture**: Loads nodes and edges from JSON files
    - Uses NetworkX (v3.3) for graph data structure
    - Gravis (v0.1.0) for D3.js visualization generation
+   - Modular functions following DRY principles:
+     - `load_nodes()` - Load node data from JSON
+     - `load_edges()` - Load edge data from JSON
+     - `separate_node_types()` - Categorize nodes (keywords vs graphics)
+     - `create_node_metadata()` - Build node visualization properties
+     - `build_graph_structure()` - Construct full graph from data
    - LRU caching decorator for performance optimization
    - Lazy loading: graphs generated only on first request
 
-2. **Configuration Management** (`config_loader.py`)
+2. **Data Storage** (`data/` directory)
+   - **nodes.json**: All 133 node definitions with labels, names, and URLs
+   - **edges.json**: All 251 edge definitions with source, target, and labels
+   - Eliminates hardcoded data in Python files
+   - Single source of truth for graph data
+   - Easy to update without modifying code
+
+3. **Configuration Management** (`config_loader.py`)
    - JSON-based configuration system
    - Fallback to default configuration if file missing
    - Centralized settings for colors, positions, and visualization parameters
 
-3. **Position Calculation Algorithm**
+4. **Position Calculation Algorithm**
    - Two-tier circular layout system:
      - **Keyword nodes**: Positioned on outer circle (radius: 1177.1)
      - **Graphic nodes**: Positioned on inner circle with interval-based spacing (radius: 360.0)
