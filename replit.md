@@ -2,9 +2,7 @@
 
 ## Overview
 
-This is a Flask-based web application that creates interactive D3.js network graph visualizations to display complex relationships between nodes. The system uses NetworkX for graph structure and Gravis for D3.js rendering, presenting a cyberpunk-themed visualization with two distinct node types: graphic nodes (visual content with linked images) positioned centrally, and keyword nodes (conceptual nodes) arranged in an outer circle.
-
-The application has been heavily refactored to follow DRY principles, achieving an 87% code reduction by externalizing all data to JSON files, making it easy to update content without modifying code.
+This is a Flask web application that creates an interactive D3.js network graph visualization displaying relationships between nodes. The project uses NetworkX for graph structure and Gravis for D3.js rendering, featuring a cyberpunk-themed design with force-directed layout. The application has been heavily refactored to follow DRY principles, achieving an 87% code reduction by externalizing all data to JSON files.
 
 ## User Preferences
 
@@ -12,91 +10,84 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Core Application Structure
-
-**Data-Driven Architecture**: The application separates data, configuration, and presentation logic completely. All node and edge data lives in JSON files under the `data/` directory, while visualization settings are stored in `config/graph_config.json`. This allows non-technical updates to content without touching Python code.
-
-**Graph Generation Strategy**: The system uses a caching mechanism to avoid regenerating the graph on every request. The graph is built once using NetworkX, positions are calculated using radial layouts (keyword nodes on outer circle at 1177.1px radius, graphic nodes centrally at 360px radius), and then rendered to static HTML using Gravis. The Flask application serves this pre-generated HTML file.
-
-**Position Calculation**: Keyword nodes are distributed evenly around a circle using trigonometric calculations (2π radians divided by node count). Graphic nodes are positioned at smaller intervals within a central radius. This creates the distinctive radial layout pattern.
-
 ### Frontend Architecture
-
-**Visualization Layer**: Uses D3.js force-directed graph rendering via the Gravis library. The graph is interactive with zoom, pan, and hover capabilities. Nodes are styled with a cyberpunk theme: black background (#000000), purple keyword nodes, green edges (with 0.1 opacity), and image thumbnails for graphic nodes.
-
-**Force Simulation Parameters**: The D3.js force simulation is heavily customized through config settings:
-- Many-body force strength: -1776.0 (repulsion)
-- Links force distance: 107.0px
-- Collision force radius: 100.0px
-- Node hover neighborhood highlighting enabled
-- Edge curvature: 0.11 for visual clarity
+- **Visualization Engine**: D3.js force-directed graph rendered via Gravis library
+- **UI Theme**: Cyberpunk aesthetic with black background, purple keyword nodes, green edges, and image thumbnails
+- **Interactive Features**: Zoom, pan, and hover interactions for exploring node relationships
+- **Responsive Design**: Adapts to different screen sizes
+- **Node Types**:
+  - Graphic nodes: Visual content with linked images and social media posts (positioned in center)
+  - Keyword nodes: Conceptual nodes positioned on outer circle in radial layout
 
 ### Backend Architecture
+- **Framework**: Flask 3.0.0+ (lightweight Python web framework)
+- **Graph Library**: NetworkX 3.3 for graph data structure and manipulation
+- **Rendering**: Gravis 0.1.0 for D3.js visualization generation
+- **Data Loading**: JSON-based configuration system with centralized data management
+- **Caching Strategy**: 
+  - Graph generation cached to avoid regeneration on every request
+  - LRU caching for JSON file loading
+  - HTTP cache control headers to ensure fresh content delivery
+- **Code Organization**:
+  - Data-driven architecture with complete separation of data from code
+  - Modular functions for graph building, position calculation, and visualization
+  - 426 lines of application code (down from 3,108 lines)
 
-**Flask Application**: Simple Flask server (`main.py`, 426 lines) that:
-1. Loads JSON data files at startup
-2. Builds NetworkX directed graph from nodes/edges
-3. Calculates node positions using radial formulas
-4. Generates HTML visualization using Gravis
-5. Serves the visualization with proper cache control headers
+### Data Storage Solutions
+- **File-Based Storage**: All data stored in JSON files (no database required)
+- **Data Structure**:
+  - `data/nodes.json`: 133 nodes with graphic metadata (labels, URLs, images)
+  - `data/edges.json`: 235 active edges defining relationships
+  - `data/edges_keyword_circular_commented.json`: 16 commented/disabled circular edges for keyword nodes
+  - `config/graph_config.json`: Visualization settings (colors, positions, forces, layout)
+- **Node Positioning**: 
+  - Calculated positions for keyword nodes on outer circle (radius: 1177.1)
+  - Graphics nodes positioned in center (radius: 360.0)
+  - Position calculations using trigonometry for radial layout
 
-**Data Loading Pattern**: Uses a centralized `load_json_file()` function with error handling for all data imports. Configuration is loaded separately from operational data to maintain clear separation of concerns.
+### Authentication and Authorization
+- **Current State**: No authentication implemented
+- **Access Control**: None - publicly accessible application
+- **Rationale**: Visualization tool designed for public access without sensitive data
 
-**Graph Construction**: 
-- 133 nodes total (graphic + keyword nodes)
-- 235 active edges defined in `edges.json`
-- 16 disabled keyword-circular edges stored separately
-- Directed graph structure with labeled edges
+### Performance Optimizations
+- Function-level caching with `@lru_cache` decorator for JSON loading
+- Graph caching to prevent regeneration on every HTTP request
+- Optimized D3.js force simulation parameters for rendering performance
+- Edge size normalization for visual clarity (min: 0.45, max: 1.07)
 
-### Data Storage
-
-**Node Data Structure** (`data/nodes.json`):
-- Graphic nodes: Include `graphicLabel`, `graphicName`, `xPostURL`, `xGraphicURL`
-- Keyword nodes: Include `keywordLabel` and `keywordName`
-- All nodes stored in a single flat JSON array
-
-**Edge Data Structure** (`data/edges.json`):
-- Source and target node identifiers
-- Optional edge labels for relationship description
-- Separate file for commented/disabled edges
-
-**Configuration Data** (`config/graph_config.json`):
-- Colors (background, highlights, defaults)
-- Position parameters (radii, intervals)
-- Graph metadata (sizes, opacities)
-- Visualization settings (forces, curvature, zoom)
-
-### Performance Optimization
-
-**Graph Caching**: The application uses a module-level flag (`_graph_generated`) to track whether the visualization has been built. Once generated, subsequent requests serve the cached HTML file directly without rebuilding the graph structure.
-
-**Position Pre-calculation**: Node positions are calculated once during graph generation using mathematical formulas, then stored in the NetworkX graph structure. This avoids runtime position calculations.
-
-**Static HTML Serving**: The final visualization is a 616KB static HTML file with embedded D3.js, served via Flask's `send_from_directory()` for optimal performance.
+### Deployment Configuration
+- **Production Server**: Gunicorn 21.2.0+ WSGI server
+- **Configuration**: `Procfile` for deployment (Replit/Heroku compatible)
+- **Dependency Management**: 
+  - `requirements.txt` for pip-based deployment
+  - `pyproject.toml` and `poetry.lock` for Poetry-based development
+- **Python Version**: 3.10 or 3.11
 
 ## External Dependencies
 
-### Python Packages
-- **Flask 3.0.0+**: Web framework for serving the application
-- **NetworkX 3.3**: Graph data structure and algorithms library
-- **Gravis 0.1.0**: D3.js graph visualization wrapper for Python
-- **Gunicorn 21.2.0+**: Production WSGI server for deployment
+### Third-Party Libraries
+- **Flask** (3.0.0+): Web application framework for serving the visualization
+- **NetworkX** (3.3): Graph theory library for building and manipulating the network structure
+- **Gravis** (0.1.0): D3.js visualization wrapper for generating interactive graphs
+- **Gunicorn** (21.2.0+): Production-grade WSGI HTTP server
 
-### Frontend Libraries
-- **D3.js**: Embedded via Gravis for force-directed graph rendering
-- No separate JavaScript dependencies - all bundled in generated HTML
+### Frontend Dependencies
+- **D3.js**: Force-directed graph layout and rendering (loaded via Gravis)
+- **SVG**: Vector graphics for visualization rendering
 
-### Deployment Platform
-- **Replit**: Configured via `Procfile` for deployment
-- Uses Gunicorn with 4 workers binding to `0.0.0.0:5000`
-- Poetry for dependency management (`pyproject.toml`, `poetry.lock`)
+### External Services
+- **X/Twitter**: Image hosting and social media post links
+  - Node images hosted on `pbs.twimg.com`
+  - Post URLs linking to `x.com` (formerly Twitter)
+  - Used for graphic node visual content and social context
 
-### Data Sources
-- Node images hosted on external URLs (Twitter/X media CDN)
-- Social media post links to Twitter/X platform
-- No database required - all data in JSON files
+### File System Dependencies
+- **Static Assets**: No local image storage; all images are external URLs
+- **Template System**: Flask Jinja2 templates for HTML generation
+- **Data Files**: JSON configuration files in `data/` and `config/` directories
 
 ### Development Tools
-- **Poetry**: Python dependency management
-- **Logging**: Python's built-in logging module for debugging
-- **Pathlib**: Cross-platform file path handling
+- **Testing**: Custom test suite (`test_app.py`, `verify_deployment.py`) for data validation and deployment readiness
+- **Logging**: Python standard library logging for debugging and monitoring
+- **Version Control**: Project includes cleanup and refactoring documentation
