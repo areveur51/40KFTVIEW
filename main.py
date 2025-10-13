@@ -111,7 +111,9 @@ def get_default_config():
         "colors": {
             "default_color": "black",
             "highlight_color": "green",
-            "background_color": "#000000"
+            "highlight_size": 1.5,
+            "background_color": "#000000",
+            "highlight2_color": "green"
         },
         "positions": {
             "keyword_radius": 1177.1,
@@ -209,7 +211,7 @@ def create_node_metadata(node, positions, config):
             }
         }
     else:
-        # Graphic node metadata
+        # Graphic node metadata with image display
         x_post_url = node["xPostURL"]
         x_graphic_url = node["xGraphicURL"]
         highlight_color = config["colors"]["highlight_color"]
@@ -227,9 +229,8 @@ def create_node_metadata(node, positions, config):
                 'label_color': highlight_color,
                 'label_size': 7,
                 'hover': hover_text,
+                'click': x_post_url,
                 'image': x_graphic_url,
-                'color': highlight_color,
-                'size': 7.0,
                 'x': positions[node_name]['x'],
                 'y': positions[node_name]['y'],
             }
@@ -265,9 +266,38 @@ def build_graph_structure(nodes, edges, config):
     # Combine positions
     all_positions = {**keyword_positions, **graphics_positions}
     
-    # Initialize graph structure
+    # Initialize graph structure with visual metadata
     graph = {
         'graph': {
+            'label': '40,000 FT. VIEW',
+            'directed': True,
+            'metadata': {
+                'graph_height': 771,
+                'arrow_color': config["colors"]["highlight_color"],
+                'arrow_size': 11,
+                'background_color': config["colors"]["background_color"],
+                'show_node': True,
+                'node_size_factor': 2,
+                'node_color': config["colors"]["background_color"],
+                'node_opacity': 0.8,
+                'node_size': 117,
+                'node_border_color': config["colors"]["default_color"],
+                'node_border_size': 0.0,
+                'node_label_color': config["colors"]["default_color"],
+                'node_label_size': 1.77,
+                'node_hover': 'Node: $label',
+                'node_click': '$hover',
+                'show_node_label': False,
+                'show_edge': True,
+                'edge_size_factor': 0.51,
+                'edge_color': config["colors"]["default_color"],
+                'edge_opacity': 0.1,
+                'edge_size': 0.1,
+                'edge_label_color': 'black',
+                'edge_label_size': 1,
+                'edge_hover': '$label',
+                'edge_click': '$label',
+            },
             'nodes': {},
             'edges': []
         }
@@ -281,11 +311,13 @@ def build_graph_structure(nodes, edges, config):
         node_data = create_node_metadata(node, all_positions, config)
         graph['graph']['nodes'][node_name] = node_data
     
-    # Add edges
+    # Add edges with cyberpunk styling
     default_edge_metadata = {
-        'directed': True,
-        'color': config["colors"]["default_color"],
-        'size': 1
+        'color': config["colors"]["highlight_color"],
+        'opacity': 1.0,
+        'size': config["colors"]["highlight_size"],
+        'label_color': config["colors"]["highlight2_color"],
+        'label_size': 5,
     }
     
     for edge in edges:
@@ -317,26 +349,13 @@ def generate_map_v2():
     # Build graph structure
     graph_data = build_graph_structure(nodes, edges, config)
     
-    # Create NetworkX graph
-    G = nx.DiGraph()
-    
-    # Add nodes to NetworkX graph
-    for node_name, node_data in graph_data['graph']['nodes'].items():
-        G.add_node(node_name, **node_data)
-    
-    # Add edges to NetworkX graph
-    for edge in graph_data['graph']['edges']:
-        G.add_edge(
-            edge['source'], 
-            edge['target'], 
-            label=edge['label'], 
-            metadata=edge['metadata']
-        )
-    
-    # Generate D3.js visualization
+    # Generate D3.js visualization with graph data structure
     fig = gv.d3(
-        G,
+        graph_data,
         graph_height=1100,
+        node_label_data_source='label',
+        edge_label_data_source='label',
+        show_edge_label=True,
         edge_curvature=0.11,
         zoom_factor=0.5,
         layout_algorithm_active=True,
@@ -344,10 +363,14 @@ def generate_map_v2():
         use_edge_size_normalization=True,
         edge_size_normalization_min=0.45,
         edge_size_normalization_max=1.07,
+        use_many_body_force=True,
         many_body_force_strength=-1776.0,
         many_body_force_theta=1.17,
+        use_many_body_force_min_distance=True,
         many_body_force_min_distance=0.01,
+        use_many_body_force_max_distance=True,
         many_body_force_max_distance=589.0,
+        use_links_force=True,
         links_force_distance=107.00,
         links_force_strength=0.11,
         use_collision_force=True,

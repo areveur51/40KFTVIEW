@@ -12,6 +12,7 @@ This is a Flask-based web application that creates interactive network graph vis
   - Eliminated data duplication by loading from JSON files
   - Created modular, reusable functions for better maintainability
   - Backed up original code to `main_old_backup.py`
+  - Preserved cyberpunk theme: black background, green edges, purple keywords, image nodes
 - **Fixed broken links**: Removed 2 edges that referenced non-existent nodes (virusorelection→thefirstwilsendashockwave, kw-FISA→declasoffisa)
 - **Created data consistency test suite**: Automated tests to verify all edges reference valid nodes
 - **Added comprehensive documentation**: Full docstrings for all functions following Google style guide

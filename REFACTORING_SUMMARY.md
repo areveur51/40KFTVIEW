@@ -189,12 +189,23 @@ def generate_map_v2():
     # ... clean generation code only ...
 ```
 
+## Visual Styling Restored
+
+The refactoring initially lost the cyberpunk theme, which has now been fully restored:
+- ✅ **Black background** (`#000000`)
+- ✅ **Green edges and labels** (highlight color)
+- ✅ **Purple keyword nodes** on outer circle
+- ✅ **Image thumbnails** on graphic nodes (center)
+- ✅ **Hover interactions** with node details
+- ✅ **Radial force-directed layout**
+
 ## Testing
 
 All existing functionality is preserved:
 - ✅ 133 nodes loaded correctly
 - ✅ 251 edges loaded correctly
 - ✅ Graph visualization works identically
+- ✅ Cyberpunk theme fully restored
 - ✅ All broken links fixed
 - ✅ No console errors
 
