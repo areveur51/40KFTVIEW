@@ -6,10 +6,11 @@ hidden = [".pythonlibs"]
 
 [nix]
 channel = "stable-23_05"
+packages = ["vim-full"]
 
 [deployment]
 deploymentTarget = "autoscale"
-publicDir = "/"
+publicDir = "templates/"
 run = ["gunicorn", "--bind=0.0.0.0:5000", "--reuse-port", "main:app"]
 
 [[ports]]
