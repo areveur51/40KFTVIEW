@@ -1912,12 +1912,6 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
-                    'source': 'virusorelection',
-                    'target': 'thefirstwilsendashockwave',
-                    'label': "R",
-                    'metadata': default_edge_metadata
-                },
-                {
                     'source': 'herdthesheep',
                     'target': 'virusorelection',
                     'label': "Anons already knew D's playbook",
@@ -2406,12 +2400,6 @@ def generate_map_v2():
                 {
                     'source': 'kw-DECLAS',
                     'target': 'trusttheplan',
-                    'label': "",
-                    'metadata': default_edge_metadata
-                },
-                {
-                    'source': 'kw-FISA',
-                    'target': 'declasoffisa',
                     'label': "",
                     'metadata': default_edge_metadata
                 },

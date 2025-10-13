@@ -148,12 +148,12 @@ def compare_backend_frontend():
     frontend_nodes = set(frontend_data.get('nodes', {}).keys())
     frontend_edges = frontend_data.get('edges', [])
     
-    # Convert frontend edges to list of dicts if they're in a different format
-    if frontend_edges and not isinstance(frontend_edges[0], dict):
-        print(f"WARNING: Frontend edges format unexpected: {type(frontend_edges[0])}")
+    # Frontend edges should be a list of dicts
+    try:
+        frontend_edge_tuples = {(e['source'], e['target']) for e in frontend_edges if isinstance(e, dict)}
+    except (TypeError, KeyError) as ex:
+        print(f"WARNING: Could not parse frontend edges: {ex}")
         frontend_edge_tuples = set()
-    else:
-        frontend_edge_tuples = {(e['source'], e['target']) for e in frontend_edges}
     
     print(f"\nBackend nodes: {len(backend_nodes)}")
     print(f"Frontend nodes: {len(frontend_nodes)}")
