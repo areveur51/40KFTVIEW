@@ -326,7 +326,12 @@ def generate_map_v2():
     
     # Add edges to NetworkX graph
     for edge in graph_data['graph']['edges']:
-        G.add_edge(edge['source'], edge['target'], **edge)
+        G.add_edge(
+            edge['source'], 
+            edge['target'], 
+            label=edge['label'], 
+            metadata=edge['metadata']
+        )
     
     # Generate D3.js visualization
     fig = gv.d3(
