@@ -6,6 +6,8 @@ This is a Flask-based web application that creates interactive network graph vis
 
 ## Recent Changes (October 2025)
 
+- **Fixed broken links**: Removed 2 edges that referenced non-existent nodes (virusorelection→thefirstwilsendashockwave, kw-FISA→declasoffisa)
+- **Created data consistency test suite**: Automated tests to verify all edges reference valid nodes
 - **Added comprehensive documentation**: Full docstrings for all functions following Google style guide
 - **Implemented graph caching**: Prevents regeneration on every request, significantly improving performance
 - **Created README.md**: Complete setup guide, API documentation, and troubleshooting section
