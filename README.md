@@ -205,6 +205,28 @@ Serves the interactive graph visualization.
 - **Efficient Data Structures**: Dictionary-based node/edge storage
 - **87% Code Reduction**: Data-driven architecture eliminates duplication
 
+## 🧪 Testing
+
+### Run Tests
+
+Comprehensive test suite to verify build integrity:
+
+```bash
+# Run all tests
+python test_app.py
+
+# Verify deployment readiness
+python verify_deployment.py
+```
+
+**What's Tested:**
+- ✅ Package imports (Flask, NetworkX, Gravis, Gunicorn)
+- ✅ Data file validity (nodes.json, edges.json, config)
+- ✅ Application components and functions
+- ✅ Data integrity (edges reference valid nodes)
+- ✅ Flask routes and responses
+- ✅ Deployment configuration
+
 ## 🐛 Troubleshooting
 
 ### Graph Not Displaying
@@ -212,6 +234,7 @@ Serves the interactive graph visualization.
 - Ensure `templates/` directory exists
 - Verify all dependencies are installed
 - Check that `data/nodes.json` and `data/edges.json` exist
+- Run `python test_app.py` to verify build
 
 ### Performance Issues
 - Graph generation is CPU-intensive for first load
@@ -227,6 +250,12 @@ Serves the interactive graph visualization.
 - Validate JSON syntax in `data/nodes.json` and `data/edges.json`
 - Ensure all edge source/target IDs match actual node names
 - Check `data/README_edges.md` for edge management documentation
+- Run `python verify_deployment.py` for full diagnostic
+
+### Build Failures
+- Run `python test_app.py` to identify specific issues
+- Check all dependencies are installed: `pip install -r requirements.txt`
+- Verify Python version 3.10 or 3.11
 
 ## 📄 License
 
