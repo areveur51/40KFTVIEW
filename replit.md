@@ -2,9 +2,9 @@
 
 ## Overview
 
-This is a Flask-based web application that creates an interactive network graph visualization using D3.js, NetworkX, and Gravis. The application displays relationships between nodes in a cyberpunk-themed force-directed graph with two distinct node types: graphic nodes (visual content with images) positioned in the center, and keyword nodes positioned on an outer circle. The visualization features a black background, purple keyword nodes, green edges, and interactive hover/zoom capabilities.
+This is a Flask-based web application that creates interactive D3.js network graph visualizations to display complex relationships between nodes. The system uses NetworkX for graph structure and Gravis for D3.js rendering, presenting a cyberpunk-themed visualization with two distinct node types: graphic nodes (visual content with linked images) positioned centrally, and keyword nodes (conceptual nodes) arranged in an outer circle.
 
-The project has undergone significant refactoring, achieving an 87% code reduction (from 3,108 to 426 lines) by externalizing all data to JSON files and applying DRY principles.
+The application has been heavily refactored to follow DRY principles, achieving an 87% code reduction by externalizing all data to JSON files, making it easy to update content without modifying code.
 
 ## User Preferences
 
@@ -12,106 +12,91 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
+### Core Application Structure
+
+**Data-Driven Architecture**: The application separates data, configuration, and presentation logic completely. All node and edge data lives in JSON files under the `data/` directory, while visualization settings are stored in `config/graph_config.json`. This allows non-technical updates to content without touching Python code.
+
+**Graph Generation Strategy**: The system uses a caching mechanism to avoid regenerating the graph on every request. The graph is built once using NetworkX, positions are calculated using radial layouts (keyword nodes on outer circle at 1177.1px radius, graphic nodes centrally at 360px radius), and then rendered to static HTML using Gravis. The Flask application serves this pre-generated HTML file.
+
+**Position Calculation**: Keyword nodes are distributed evenly around a circle using trigonometric calculations (2π radians divided by node count). Graphic nodes are positioned at smaller intervals within a central radius. This creates the distinctive radial layout pattern.
+
 ### Frontend Architecture
 
-**Visualization Layer**
-- **D3.js Force-Directed Graph**: Interactive graph rendering with zoom, pan, and hover capabilities
-- **Gravis Library**: Python-to-D3.js bridge that generates the visualization HTML
-- **Static HTML Generation**: Pre-rendered graph served from `templates/index.html` (616KB)
-- **Cyberpunk Theme**: Custom styling with black background (#000000), purple keyword nodes, green edges, and image thumbnails
+**Visualization Layer**: Uses D3.js force-directed graph rendering via the Gravis library. The graph is interactive with zoom, pan, and hover capabilities. Nodes are styled with a cyberpunk theme: black background (#000000), purple keyword nodes, green edges (with 0.1 opacity), and image thumbnails for graphic nodes.
 
-**Layout Algorithm**
-- **Circular Positioning**: Keyword nodes arranged on outer circle (radius: 1177.1px)
-- **Central Clustering**: Graphic nodes positioned in center (radius: 360px)
-- **Force Simulation Parameters**: Configurable many-body forces, link forces, and collision detection for optimal node spacing
+**Force Simulation Parameters**: The D3.js force simulation is heavily customized through config settings:
+- Many-body force strength: -1776.0 (repulsion)
+- Links force distance: 107.0px
+- Collision force radius: 100.0px
+- Node hover neighborhood highlighting enabled
+- Edge curvature: 0.11 for visual clarity
 
 ### Backend Architecture
 
-**Application Framework**
-- **Flask 3.0+**: Lightweight web server with single-route architecture
-- **Template Serving**: Serves pre-generated HTML with cache control headers
-- **On-Demand Generation**: Graph regeneration only when needed, with caching to avoid repeated computation
+**Flask Application**: Simple Flask server (`main.py`, 426 lines) that:
+1. Loads JSON data files at startup
+2. Builds NetworkX directed graph from nodes/edges
+3. Calculates node positions using radial formulas
+4. Generates HTML visualization using Gravis
+5. Serves the visualization with proper cache control headers
 
-**Data Management Pattern**
-- **JSON-Driven Architecture**: All node and edge data externalized to JSON files
-- **Separation of Concerns**: 
-  - `data/nodes.json` - 133 node definitions with metadata
-  - `data/edges.json` - 235 active edge relationships  
-  - `data/edges_keyword_circular_commented.json` - 16 disabled circular edges
-  - `config/graph_config.json` - Visualization parameters and styling
-- **Modular Loading**: Reusable functions for JSON parsing and validation
+**Data Loading Pattern**: Uses a centralized `load_json_file()` function with error handling for all data imports. Configuration is loaded separately from operational data to maintain clear separation of concerns.
 
-**Graph Generation Pipeline**
-1. Load node and edge data from JSON files
-2. Create NetworkX directed graph structure
-3. Calculate node positions (circular for keywords, central for graphics)
-4. Apply visual styling from configuration
-5. Generate D3.js HTML using Gravis
-6. Cache result to avoid regeneration
+**Graph Construction**: 
+- 133 nodes total (graphic + keyword nodes)
+- 235 active edges defined in `edges.json`
+- 16 disabled keyword-circular edges stored separately
+- Directed graph structure with labeled edges
 
-**Performance Optimizations**
-- **LRU Caching**: Function-level caching with `@lru_cache` decorator
-- **Lazy Loading**: Graph generated only on first request
-- **Position Pre-calculation**: Node positions computed once and reused
-- **Cache Control Headers**: HTTP headers prevent stale browser caching
+### Data Storage
 
-### Data Storage Solutions
+**Node Data Structure** (`data/nodes.json`):
+- Graphic nodes: Include `graphicLabel`, `graphicName`, `xPostURL`, `xGraphicURL`
+- Keyword nodes: Include `keywordLabel` and `keywordName`
+- All nodes stored in a single flat JSON array
 
-**File-Based JSON Storage**
-- No database required - all data stored as JSON files
-- Version controllable and human-readable
-- Easy to update without code changes
+**Edge Data Structure** (`data/edges.json`):
+- Source and target node identifiers
+- Optional edge labels for relationship description
+- Separate file for commented/disabled edges
 
-**Data Structure**
-- **Nodes**: Objects with `graphicLabel`, `graphicName`, `xPostURL`, `xGraphicURL` for graphics; keyword nodes prefixed with `kw-`
-- **Edges**: Objects with `source`, `target`, and optional `label` fields
-- **Configuration**: Nested JSON with colors, positions, metadata, and visualization parameters
+**Configuration Data** (`config/graph_config.json`):
+- Colors (background, highlights, defaults)
+- Position parameters (radii, intervals)
+- Graph metadata (sizes, opacities)
+- Visualization settings (forces, curvature, zoom)
 
-**Data Organization**
-```
-data/
-├── nodes.json                              # Primary node definitions
-├── edges.json                              # Active edges (235)
-├── edges_keyword_circular_commented.json   # Disabled edges (16)
-└── README_edges.md                         # Edge documentation
+### Performance Optimization
 
-config/
-└── graph_config.json                       # All visualization settings
-```
+**Graph Caching**: The application uses a module-level flag (`_graph_generated`) to track whether the visualization has been built. Once generated, subsequent requests serve the cached HTML file directly without rebuilding the graph structure.
 
-### Authentication and Authorization
+**Position Pre-calculation**: Node positions are calculated once during graph generation using mathematical formulas, then stored in the NetworkX graph structure. This avoids runtime position calculations.
 
-**None Required**
-- Public-facing visualization with no authentication
-- Read-only access model
-- No user accounts or sessions needed
+**Static HTML Serving**: The final visualization is a 616KB static HTML file with embedded D3.js, served via Flask's `send_from_directory()` for optimal performance.
 
-### External Dependencies
+## External Dependencies
 
-**Python Libraries**
-- **Flask 3.0.0+**: Web application framework
-- **NetworkX 3.3**: Graph data structure and algorithms
-- **Gravis 0.1.0**: D3.js visualization generation from NetworkX graphs
+### Python Packages
+- **Flask 3.0.0+**: Web framework for serving the application
+- **NetworkX 3.3**: Graph data structure and algorithms library
+- **Gravis 0.1.0**: D3.js graph visualization wrapper for Python
 - **Gunicorn 21.2.0+**: Production WSGI server for deployment
 
-**Frontend Libraries (Embedded via Gravis)**
-- **D3.js**: Force-directed graph rendering and interactions
-- Browser-based rendering, no external CDN dependencies
+### Frontend Libraries
+- **D3.js**: Embedded via Gravis for force-directed graph rendering
+- No separate JavaScript dependencies - all bundled in generated HTML
 
-**Social Media Integration**
-- **X (Twitter) Post URLs**: Each graphic node links to associated X posts
-- **Image Hosting**: Uses X's image CDN (pbs.twimg.com) for thumbnail display
-- No API integration - uses direct URL references
+### Deployment Platform
+- **Replit**: Configured via `Procfile` for deployment
+- Uses Gunicorn with 4 workers binding to `0.0.0.0:5000`
+- Poetry for dependency management (`pyproject.toml`, `poetry.lock`)
 
-**Deployment Platform**
-- **Replit**: Target deployment platform
-- **Procfile**: Configured for Gunicorn with 4 workers
-- **Poetry**: Dependency management via `pyproject.toml` and `poetry.lock`
+### Data Sources
+- Node images hosted on external URLs (Twitter/X media CDN)
+- Social media post links to Twitter/X platform
+- No database required - all data in JSON files
 
-**Development Tools**
-- **Test Scripts**: `test_app.py` for data validation, `verify_deployment.py` for production readiness
-- **Logging**: Standard Python logging for debugging and monitoring
-
-**No Database Required**
-- Pure file-based architecture eliminates database dependency
-- Could be extended with Postgres/SQLite if dynamic data updates are needed in future
+### Development Tools
+- **Poetry**: Python dependency management
+- **Logging**: Python's built-in logging module for debugging
+- **Pathlib**: Cross-platform file path handling
