@@ -1,0 +1,4 @@
+flask>=3.0.0
+gunicorn>=21.2.0
+networkx==3.3
+gravis==0.1.0

@@ -1,0 +1,52 @@
+{
+  "colors": {
+    "default_color": "black",
+    "highlight_color": "green",
+    "highlight_size": 1.5,
+    "background_color": "#000000",
+    "highlight2_color": "green"
+  },
+  "positions": {
+    "keyword_radius": 1177.1,
+    "graphics_radius": 360.0,
+    "graphics_interval": 5
+  },
+  "graph_metadata": {
+    "label": "40,000 FT. VIEW",
+    "directed": true,
+    "graph_height": 771,
+    "arrow_size": 11,
+    "node_size_factor": 2,
+    "node_opacity": 0.8,
+    "node_size": 117,
+    "node_border_size": 0.0,
+    "node_label_size": 1.77,
+    "show_node_label": false,
+    "show_edge": true,
+    "edge_size_factor": 0.51,
+    "edge_opacity": 0.1,
+    "edge_size": 0.1,
+    "edge_label_size": 1
+  },
+  "visualization": {
+    "graph_height": 1100,
+    "edge_curvature": 0.11,
+    "zoom_factor": 0.5,
+    "layout_algorithm_active": true,
+    "node_hover_neighborhood": true,
+    "use_edge_size_normalization": true,
+    "edge_size_normalization_min": 0.45,
+    "edge_size_normalization_max": 1.07,
+    "many_body_force_strength": -1776.0,
+    "many_body_force_theta": 1.17,
+    "many_body_force_min_distance": 0.01,
+    "many_body_force_max_distance": 589.0,
+    "links_force_distance": 107.0,
+    "links_force_strength": 0.11,
+    "collision_force_radius": 100.0,
+    "collision_force_strength": 0.07,
+    "x_positioning_force_strength": 0.07,
+    "y_positioning_force_strength": 0.1,
+    "use_centering_force": false
+  }
+}

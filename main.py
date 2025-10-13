@@ -1,28 +1,156 @@
-## AREVEUR5117
+"""
+Interactive Network Graph Visualization Application
+
+This Flask application generates an interactive D3.js network graph visualization
+that displays relationships between various nodes and concepts. The graph uses the
+gravis library for D3.js rendering and NetworkX for graph structure.
+
+Author: AREVEUR5117
+Version: 2.0
+"""
+
 import networkx as nx
 import gravis as gv
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, Response
 import logging
+import math
+import os
+from functools import lru_cache
+from datetime import datetime
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# Create a flask app
 app = Flask(__name__)
 
+# Cache control to prevent browser caching issues
+_graph_generated = False
+_generation_time = None
 
-# Index page
+
 @app.route('/')
-def index():
-    logger.info('Index page is loaded')
-    # generate in dev mode to create index file
-    # then deploy with updated index file
-    # generate_map()
-    generate_map_v2()
-    return send_from_directory('templates', 'index.html')
+def index() -> Response:
+    """
+    Serve the main index page with the network graph visualization.
+    
+    This route generates the graph visualization on the first request and serves
+    the cached HTML on subsequent requests unless regeneration is forced.
+    
+    Returns:
+        Response: Flask response object with the index.html file and cache control headers.
+    """
+    global _graph_generated, _generation_time
+    
+    logger.info('Index page requested')
+    
+    # Check if we need to generate the graph
+    template_path = 'templates/index.html'
+    if not _graph_generated or not os.path.exists(template_path):
+        logger.info('Generating new graph visualization...')
+        generate_map_v2()
+        _graph_generated = True
+        _generation_time = datetime.now()
+        logger.info(f'Graph generated successfully at {_generation_time}')
+    else:
+        logger.info(f'Serving cached graph (generated at {_generation_time})')
+    
+    response = send_from_directory('templates', 'index.html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+
+def calculate_positions(node_names, radius, interval=None):
+    """
+    Calculate circular or spiral positions for graph nodes.
+    
+    This function positions nodes either in a simple circle (for keyword nodes) or
+    in a spiral pattern (for graphic nodes). The spiral pattern helps distribute
+    nodes more evenly when there are many nodes.
+    
+    Args:
+        node_names (list): List of node name strings to position.
+        radius (float): Base radius for node placement.
+        interval (int, optional): If provided, creates a spiral pattern with this
+                                 many nodes per revolution. If None, creates a simple
+                                 circle. Defaults to None.
+    
+    Returns:
+        dict: Dictionary mapping node names to position dictionaries with 'x' and 'y' keys.
+              For example: {'node1': {'x': 100.5, 'y': 200.3}, ...}
+    
+    Examples:
+        >>> names = ['node1', 'node2', 'node3']
+        >>> positions = calculate_positions(names, radius=100)
+        >>> 'node1' in positions
+        True
+        >>> 'x' in positions['node1']
+        True
+    """
+    num_nodes = len(node_names)
+    
+    if interval is None:
+        # Calculate simple circular positions for outer (keyword) nodes
+        return {
+            name: {
+                'x': radius * math.cos(2 * math.pi * i / num_nodes),
+                'y': radius * math.sin(2 * math.pi * i / num_nodes)
+            }
+            for i, name in enumerate(node_names)
+        }
+    else:
+        # Calculate spiral positions for inner (graphic) nodes
+        # Pre-calculate interval factor to optimize performance
+        interval_factor = 170 / radius
+        return {
+            name: {
+                'x':
+                radius * (1 + (i % interval) * interval_factor) *
+                math.cos(2 * math.pi * (i // interval) /
+                         (num_nodes // interval + 1)),
+                'y':
+                radius * (1 + (i % interval) * interval_factor) *
+                math.sin(2 * math.pi * (i // interval) /
+                         (num_nodes // interval + 1))
+            }
+            for i, name in enumerate(node_names)
+        }
 
 
 def generate_map_v2():
+    """
+    Generate the interactive network graph visualization.
+    
+    This function creates a complex D3.js network graph visualization with:
+    - Multiple node types (graphics nodes and keyword nodes)
+    - Interconnected edges representing relationships
+    - Custom positioning using circular and spiral layouts
+    - Interactive features (hover, click, zoom)
+    - Custom styling and visual properties
+    
+    The generated graph is exported as an HTML file to both 'index.html' and 
+    'templates/index.html' for serving via Flask.
+    
+    Node Types:
+        - Graphic nodes: Visual content nodes with images and X (Twitter) post links
+        - Keyword nodes: Text-only nodes positioned on the outer circle (prefix: 'kw-')
+    
+    Returns:
+        str: Path to the exported HTML file ('templates/index.html').
+        
+    Side Effects:
+        - Creates/overwrites 'index.html' in the root directory
+        - Creates/overwrites 'templates/index.html' for Flask serving
+        - Logs node information during generation
+    
+    Note:
+        This function contains all node and edge data inline. For better
+        maintainability, consider externalizing this data to JSON files.
+    """
     data = [
         {
             "graphicLabel":
@@ -814,6 +942,475 @@ def generate_map_v2():
             "xGraphicURL":
             "https://pbs.twimg.com/media/GgHPDNhX0AAm0RX?format=jpg&name=large",
         },
+        {
+            "graphicLabel":
+            "UNFOOKWITABLE AMERICANS",
+            "graphicName":
+            "unfookwitableamericans",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1874677430524211452?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GgQyXwcWIAEPWSz?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "HUMANITY IS GOOD",
+            "graphicName":
+            "humanityisgood",
+            "xPostURL":
+            "https://x.com/areveur51/status/1878154669937119527?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GhCLt5yXoAAxl7h?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "OBAMAGATE",
+            "graphicName":
+            "obamagate",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1879560774282039604?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GhWKj1tXEAAT8bG?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "THE SHOT HEARD AROUND THE WORLD",
+            "graphicName":
+            "theshot",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1883702964021301450?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GiRB3EcXEAAfR4i?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "NOW PLAYING",
+            "graphicName":
+            "nowplaying",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1885866158538056133?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GivxRmPWUAAEzcX?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "HELLO GEORGE",
+            "graphicName":
+            "hellogeorge",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1887441499626811762?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GjGKChcWUAAdSd6?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "HELLO GEORGE",
+            "graphicName":
+            "hellogeorge2",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1907835843114389506?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/Gnn-lgXXwAAeuMc?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "THE FIRST WILL SEND A SHOCK WAVE",
+            "graphicName":
+            "thefirstwillsendashockwave",
+            "xPostURL":
+            "https://x.com/areveur51/status/1891714252324348394?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GkC4Fg0WwAAASJx?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "THANK YOU USSS",
+            "graphicName":
+            "thankyouusss",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1893854421894754426?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GkhSjyaXgAEQ-cR?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "ALL FOR A LARP",
+            "graphicName":
+            "allforalarp",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1897363401413685584?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GlTJ9OGX0AAft0v?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "MATCHING USA PIN",
+            "graphicName":
+            "matchingusapin",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1897416520017629283?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GlT6RI-XwAAkzWO?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "MARCH MADNESS",
+            "graphicName":
+            "marchmadness",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1899107004200669228?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/Glr7wH-XUAEi_m5?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "GOOGLE",
+            "graphicName":
+            "google",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1899147411018154475?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GlsgV4mXQAAD0vw?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "CHAIN OF COMMAND",
+            "graphicName":
+            "chainofcommand",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1901688461997801929?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GmQnkl7WcAADvPo?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "RUSSIA PROBE & FISA ABUSE",
+            "graphicName":
+            "russiaprobeandfisaabuse",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1902121464356061524?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GmWxY1iXYAAk_-z?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "NEW DISCOVERY UNDERNEATH THE PYRAMIDS",
+            "graphicName":
+            "newdiscoveryunderneaththepyramids",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1903868260681965729?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GmvmF4TbgAA3H9s?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "MARATHON END",
+            "graphicName":
+            "marathonend",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1932461849473069435?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GtF7z1_WYAADl6u?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "PATRIOTS MAKE SACRIFICES",
+            "graphicName":
+            "patriotsmakesacrifices",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1932845632655405320?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GtLY24WXcAAy0fe?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "WELCOME TO YOUR NEW REALITY",
+            "graphicName":
+            "welcometoyournewreality",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1933183743306416389?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GtQMXc1XYAE58TQ?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "DEPT OF DEFENSE TEST",
+            "graphicName":
+            "deptofdefensetest",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1933441068101509279?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GtT2Z3tXwAAdlXz?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "WE MUST FIGHT",
+            "graphicName":
+            "wemustfight",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1934413058467848668?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GthqyB8XkAABO-b?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "AS THE WORLD TURNS",
+            "graphicName":
+            "astheworldturns",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1934424087616442571?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/Gth0dJEXkAEVqtL?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "WAS BLIND, BUT NOW... [YOU SEE]",
+            "graphicName":
+            "wasblindbutnowyousee",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1934436587799974206?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/Gth_0pLWEAA0wPp?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "IRAN IS NEXT",
+            "graphicName":
+            "iranisnext",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1935082720016621986?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GtrLedDXUAEw8gu?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "WHY IS POTUS FOCUSED ON SA/CHINA/RUSSIA?",
+            "graphicName":
+            "whyispotusfocusedonsachinarussia",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1937225148672717167?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GuJoAVrXcAE1XZf?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "TRUST THE PLAN",
+            "graphicName":
+            "trusttheplan",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1937270612462043202?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GuKRWrfWMAAWjD7?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "BADGE OF HONOR",
+            "graphicName":
+            "badgeofhonor",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1938001777565306972?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GuUqV_TWUAAyZj0?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "WATCH THE NEWS",
+            "graphicName":
+            "watchthenews",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1939724202279383422?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GutI4TwXYAAYkwc?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "RUNWAY IS CLEAR FOR TAKEOFF",
+            "graphicName":
+            "runwayisclearfortakeoff",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1939765797829640594?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/Gututm1WkAA2YTN?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "A WORLD UNITED IS A BEAUTIFUL THING",
+            "graphicName":
+            "aworldunitedisabeautifulthing",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1940471093145317765?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/Gu3wJuZX0AE3zrS?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "WE THE PEPE",
+            "graphicName":
+            "wethepepe",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1940980161001759228?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/Gu-_KIgXUAAB4y9?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "SHEEP NO MORE",
+            "graphicName":
+            "sheepnomore",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1944882867508490732?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/Gv2cpZsWUAA4KSK?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "FIREWALL : MAURENE COMEY",
+            "graphicName":
+            "firewall",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1945697061652832632?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GwCBKUUXEAAzbVb?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "OUT OF SHADOWS",
+            "graphicName":
+            "outofshadows",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1946996467174154748?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GwUe96oWoAE5U6l?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "DON'T BELIEVE EVERYTHING YOU READ",
+            "graphicName":
+            "dontbelieveeverythingyouread",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1947019966730981720?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GwU0VQhWgAANw7x?format=jpg&name=large",
+        },
+        {
+            "graphicLabel":
+            "WE ARE TALKING TO YOU",
+            "graphicName":
+            "wearetalkingtoyou",
+            "xPostURL":
+            "https://x.com/Areveur51/status/1947038344245846169?s=61&t=ZoFVBiZqOoyaYVvUb8ZMcw",
+            "xGraphicURL":
+            "https://pbs.twimg.com/media/GwVFC8vXwAAR4UF?format=jpg&name=large",
+        },
+        # keywords
+        {
+            "graphicLabel": "NCSWIC",
+            "graphicName": "kw-NCSWIC",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "COVID",
+            "graphicName": "kw-COVID",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "DECLAS",
+            "graphicName": "kw-DECLAS",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "NewsUnlocksMap",
+            "graphicName": "kw-NewsUnlocksMap",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "NOSUCHAGENCY",
+            "graphicName": "kw-NOSUCHAGENCY",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "PanicInDC",
+            "graphicName": "kw-PanicInDC",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "LogicalThinking",
+            "graphicName": "kw-LogicalThinking",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "MathematicallyImpossible",
+            "graphicName": "kw-MathematicallyImpossible",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "PATRIOTS",
+            "graphicName": "kw-PATRIOTS",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "QANON",
+            "graphicName": "kw-QANON",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "FISA",
+            "graphicName": "kw-FISA",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "SESSIONS",
+            "graphicName": "kw-SESSIONS",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "SNOWDEN",
+            "graphicName": "kw-SNOWDEN",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "TheGreatAwakening",
+            "graphicName": "kw-TheGreatAwakening",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "USMIL",
+            "graphicName": "kw-USMIL",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "VirusOrElection",
+            "graphicName": "kw-VirusOrElection",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "WWG1WGA",
+            "graphicName": "kw-WWG1WGA",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
+        {
+            "graphicLabel": "RussiaHoax",
+            "graphicName": "kw-RussiaHoax",
+            "xPostURL": "",
+            "xGraphicURL": "",
+        },
     ]
 
     default_color = 'black'
@@ -852,7 +1449,7 @@ def generate_map_v2():
                 'node_border_size': 0.0,
                 'node_label_color': default_color,
                 'node_label_size': 1.77,
-                'node_hover': 'Decode: $label',
+                'node_hover': 'Node: $label',
                 'node_click': '$hover',
                 'show_node_label': False,
                 'show_edge': True,
@@ -867,6 +1464,12 @@ def generate_map_v2():
             },
             'nodes': {},
             'edges': [
+                {
+                    'source': 'aworldunitedisabeautifulthing',
+                    'target': 'fightfightfight',
+                    'label': "Trump should be shot!",
+                    'metadata': default_edge_metadata
+                },
                 {
                     'source': 'greatestfear',
                     'target': 'freethought',
@@ -918,6 +1521,12 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'freethought',
+                    'target': 'wasblindbutnowyousee',
+                    'label': 'Free thought',
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'cleanhouse',
                     'target': 'backchannels',
                     'label': 'How is information transmitted?',
@@ -949,6 +1558,12 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'qclearancepatriot',
+                    'target': 'wearetalkingtoyou',
+                    'label': 'Great job, Patriot',
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'backchannels',
                     'target': 'vipanon',
                     'label': '#qproofs',
@@ -959,6 +1574,12 @@ def generate_map_v2():
                     'target': 'renegade',
                     'label':
                     '[R]enegade_(Borack Obama) + [4] OUTSIDE CONTRACTORS',
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'keyhole',
+                    'target': 'google',
+                    'label': 'KEYHOLE INC',
                     'metadata': default_edge_metadata
                 },
                 {
@@ -986,6 +1607,12 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'subversion',
+                    'target': 'renegade',
+                    'label': 'missing [R] = Renegade',
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'pdbpapertrail',
                     'target': 'endofthedparty',
                     'label': 'Clinton investigation',
@@ -1007,6 +1634,12 @@ def generate_map_v2():
                     'source': 'wizardsandwarlocks',
                     'target': 'xkeyscore',
                     'label': "Snowden made public NSA CLAS tools",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'wizardsandwarlocks',
+                    'target': 'marathonend',
+                    'label': "We've got plenty of information on these crooks",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1042,6 +1675,12 @@ def generate_map_v2():
                 },
                 {
                     'source': 'snowden',
+                    'target': 'obamagate',
+                    'label': "BOOZ ALLEN SPY",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'snowden',
                     'target': 'enjoytheshow',
                     'label': "Snowden is a traitor to our country.",
                     'metadata': default_edge_metadata
@@ -1050,6 +1689,13 @@ def generate_map_v2():
                     'source': 'husseiniran',
                     'target': 'renegade',
                     'label': "Hussein is a traitor to our country.",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'husseiniran',
+                    'target': 'iranisnext',
+                    'label':
+                    "Obama was able to send $1.7 Billion Dollars in CASH to Iran",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1065,9 +1711,34 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'dontbelieveeverythingyouread',
+                    'target': 'endofthedparty',
+                    'label': "Clinton emails",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'projectdeepdreamv2',
                     'target': 'snowden',
                     'label': "Clown_Comm_Narrative.png",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'vipanon',
+                    'target': 'wearetalkingtoyou',
+                    'label': 'Proofs',
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'westandattheready',
+                    'target': 'aworldunitedisabeautifulthing',
+                    'label': "Trump should be shot!",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'wethepepe',
+                    'target': 'milintel',
+                    'label':
+                    "Autists should consider joining ABCs/Mil Intel programs",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1161,6 +1832,12 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'enjoytheshow',
+                    'target': 'nowplaying',
+                    'label': "PANIC IN DC",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'goorders',
                     'target': 'manilaextraction',
                     'label':
@@ -1183,6 +1860,13 @@ def generate_map_v2():
                     'source': 'msmattack',
                     'target': 'nothingishappening',
                     'label': "HUSSEIN DIRECT ORDERS",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'msmattack',
+                    'target': 'hellogeorge',
+                    'label':
+                    "MSM coming - BIG WAY. MSM LOST CONTROL. FAKE NEWS.",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1228,9 +1912,33 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'virusorelection',
+                    'target': 'thefirstwilsendashockwave',
+                    'label': "R",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'herdthesheep',
                     'target': 'virusorelection',
                     'label': "Anons already knew D's playbook",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'herdthesheep',
+                    'target': 'clintonobamaticket',
+                    'label': "[s] D's playbook election",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'herdthesheep',
+                    'target': 'sheepnomore',
+                    'label': "The More You Know....",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'hellogeorge',
+                    'target': 'hellogeorge2',
+                    'label': "HELLO GEORGE",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1264,6 +1972,24 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'mediabrainwashing',
+                    'target': 'outofshadows',
+                    'label': "[MK_active]",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'watchthenews',
+                    'target': 'mediabrainwashing',
+                    'label': "These people are stupid.",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'watchthenews',
+                    'target': 'msmattack',
+                    'label': "These people are stupid.",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'trumpelonxspace',
                     'target': 'westandattheready',
                     'label': "we will be ready",
@@ -1288,9 +2014,21 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
-                    'source': 'herdthesheep',
-                    'target': 'clintonobamaticket',
-                    'label': "[s] D's playbook election",
+                    'source': 'unfookwitable',
+                    'target': 'badgeofhonor',
+                    'label': "Unfookwitable",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'badgeofhonor',
+                    'target': 'unfookwitableamericans',
+                    'label': "Unfookwitable",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'badgeofhonor',
+                    'target': 'number2qanon',
+                    'label': "SOMETHING BIG IS ABOUT TO DROP.",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1319,10 +2057,22 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'genflynn',
+                    'target': 'runwayisclearfortakeoff',
+                    'label': "FIRE AT WILL, COMMANDER",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'shadowgovernment',
                     'target': 'unmasking',
                     'label':
                     "Obama Officials Involved in ‘Unmasking’ General Flynn ",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'thankyouusss',
+                    'target': 'genflynn',
+                    'label': "Flynn is a patriot",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1368,6 +2118,18 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'historybooks',
+                    'target': 'patriotsmakesacrifices',
+                    'label': "The next phase will bring JUSTICE",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'historybooks',
+                    'target': 'welcometoyournewreality',
+                    'label': "HISTORY BOOKS",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'endofthedparty',
                     'target': 'historybooks',
                     'label': "ONE FOR THE HISTORY BOOKS? NOT LONG NOW.",
@@ -1377,6 +2139,13 @@ def generate_map_v2():
                     'source': 'qanon',
                     'target': 'number2qanon',
                     'label': "[Past 7 Days]",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'number2qanon',
+                    'target': 'allforalarp',
+                    'label':
+                    "targeted and attacked by the largest media co's in the world",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1416,6 +2185,18 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'timetoshowtheworld',
+                    'target': 'matchingusapin',
+                    'label': "Patriots in trusted positions.",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'timetoshowtheworld',
+                    'target': 'astheworldturns',
+                    'label': "Those [good] who cannot sleep.",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'skyfortressengaged',
                     'target': 'enjoytheshow',
                     'label': "FOR GOD & COUNTRY",
@@ -1440,9 +2221,21 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'snowdenvspotus',
+                    'target': 'obamagate',
+                    'label': "IDEN another leaker",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'fightfightfight',
                     'target': 'enjoytheshow',
                     'label': "WWG1WGA",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'fightfightfight',
+                    'target': 'wemustfight',
+                    'label': "We Must Fight - President Reagan",
                     'metadata': default_edge_metadata
                 },
                 {
@@ -1512,14 +2305,724 @@ def generate_map_v2():
                     'metadata': default_edge_metadata
                 },
                 {
+                    'source': 'thefirstwillsendashockwave',
+                    'target': 'matchingusapin',
+                    'label':
+                    "Half the people involved in the Russian investigation are going to jail.",
+                    'metadata': default_edge_metadata
+                },
+                {
                     'source': 'thegreatawakening',
                     'target': 'freethought',
                     'label': "THE GREAT AWAKENING",
                     'metadata': default_edge_metadata
                 },
+                {
+                    'source': 'thegreatawakening',
+                    'target': 'unfookwitable',
+                    'label': "Prosecution and Transparency",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'thegreatawakening',
+                    'target': 'wasblindbutnowyousee',
+                    'label': "The Great Awakening",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'theshot',
+                    'target': 'sarscov2',
+                    'label':
+                    "𝚆𝚞𝚑𝚊𝚗 𝙸𝚗𝚜𝚝𝚒𝚝𝚞𝚝𝚎 𝚘𝚏 𝚅𝚒𝚛𝚘𝚕𝚘𝚐𝚢 𝚘𝚏 𝚝𝚑𝚎 𝙲𝚑𝚒𝚗𝚎𝚜𝚎 𝙰𝚌𝚊𝚍𝚎𝚖𝚢 𝚘𝚏 𝚂𝚌𝚒𝚎𝚗𝚌𝚎𝚜",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'unfookwitableamericans',
+                    'target': 'unfookwitable',
+                    'label': "We are UNITED in these STATES OF AMERICA",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'matchingusapin',
+                    'target': 'bringthethunder',
+                    'label': "PAIN",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'matchingusapin',
+                    'target': 'historybooks',
+                    'label': "JUSTICE",
+                    'metadata': default_edge_metadata
+                },
+                # keywords : graphics connections
+                {
+                    'source': 'kw-COVID',
+                    'target': 'sarscov2',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-COVID',
+                    'target': 'virusorelection',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-COVID',
+                    'target': 'theshot',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-DECLAS',
+                    'target': 'endofthedparty',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-DECLAS',
+                    'target': 'subversion',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-DECLAS',
+                    'target': 'censorship',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-DECLAS',
+                    'target': 'marchmadness',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-DECLAS',
+                    'target': 'newdiscoveryunderneaththepyramids',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-DECLAS',
+                    'target': 'trusttheplan',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'declasoffisa',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'enjoytheshow',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'qknowledgeispower',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'unmasking',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'classified',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'msmattack',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'disclosure',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'russiaprobeandfisaabuse',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-FISA',
+                    'target': 'firewall',
+                    'label':
+                    "James Comey signed off on 3 of 4 illegal FISA warrants",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-LogicalThinking',
+                    'target': 'enjoytheshow',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-LogicalThinking',
+                    'target': 'whyispotusfocusedonsachinarussia',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-LogicalThinking',
+                    'target': 'firewall',
+                    'label': "Firewall : Maurene Comey Fired",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'qclearancepatriot',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'timetoshowtheworld',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'foranonspatriots',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'thankyouveterans',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'msmattack',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'moreconfusing',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'humanityisgood',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'patriotsmakesacrifices',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'wethepepe',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PATRIOTS',
+                    'target': 'wearetalkingtoyou',
+                    'label': "Proofs only meant for you",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-MathematicallyImpossible',
+                    'target': 'foranonspatriots',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NCSWIC',
+                    'target': 'unfookwitableamericans',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NewsUnlocksMap',
+                    'target': 'itwasoverbeforeitbegan',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NewsUnlocksMap',
+                    'target': 'watchthenews',
+                    'label': "These people are stupid.",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'disclosure',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'wizardsandwarlocks',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'bringthethunder',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'classified',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'keystonedni',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'msmattack',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'snowden',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'cleanhouse',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'thankyouusss',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-NOSUCHAGENCY',
+                    'target': 'deptofdefensetest',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PanicInDC',
+                    'target': 'enjoytheshow',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PanicInDC',
+                    'target': 'classified',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-PanicInDC',
+                    'target': 'nowplaying',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-QANON',
+                    'target': 'qanon',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-QANON',
+                    'target': 'number2qanon',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-QANON',
+                    'target': 'vipanon',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-QANON',
+                    'target': 'sarscov2',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-QANON',
+                    'target': 'allforalarp',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-QANON',
+                    'target': 'qclearancepatriot',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-QANON',
+                    'target': 'qknowledgeispower',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-QANON',
+                    'target': 'chainofcommand',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SESSIONS',
+                    'target': 'ecw',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SESSIONS',
+                    'target': 'wrayisasleeper',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SESSIONS',
+                    'target': 'endofthedparty',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SESSIONS',
+                    'target': 'subversion',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SNOWDEN',
+                    'target': 'snowden',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SNOWDEN',
+                    'target': 'snowdenvspotus',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SNOWDEN',
+                    'target': 'commsgood',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SNOWDEN',
+                    'target': 'crowdstrike',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SNOWDEN',
+                    'target': 'projectdeepdreamv2',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-SNOWDEN',
+                    'target': 'obamagate',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-TheGreatAwakening',
+                    'target': 'thegreatawakening',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-TheGreatAwakening',
+                    'target': 'freethought',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-USMIL',
+                    'target': 'milintel',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-USMIL',
+                    'target': 'subversion',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-USMIL',
+                    'target': 'wrayisasleeper',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-USMIL',
+                    'target': 'keystonedni',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-USMIL',
+                    'target': 'foranonspatriots',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-USMIL',
+                    'target': 'chainofcommand',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-USMIL',
+                    'target': 'deptofdefensetest',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-VirusOrElection',
+                    'target': 'herdthesheep',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-WWG1WGA',
+                    'target': 'noonepersonisaboveanother',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-WWG1WGA',
+                    'target': 'enjoytheshow',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-WWG1WGA',
+                    'target': 'genflynn',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-WWG1WGA',
+                    'target': 'readytoserve',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-WWG1WGA',
+                    'target': 'bringthethunder',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-WWG1WGA',
+                    'target': 'freethought',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-WWG1WGA',
+                    'target': 'projectdeepdreamv2',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-WWG1WGA',
+                    'target': 'foranonspatriots',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-DECLAS',
+                    'target': 'unfookwitable',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-RussiaHoax',
+                    'target': 'thefirstwillsendashockwave',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'kw-RussiaHoax',
+                    'target': 'russiaprobeandfisaabuse',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'whyispotusfocusedonsachinarussia',
+                    'target': 'kw-RussiaHoax',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'whyispotusfocusedonsachinarussia',
+                    'target': 'husseiniran',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'whyispotusfocusedonsachinarussia',
+                    'target': 'iranisnext',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                {
+                    'source': 'whyispotusfocusedonsachinarussia',
+                    'target': 'russiaprobeandfisaabuse',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                # keywords clockwise order
+                {
+                    'source': 'kw-COVID',
+                    'target': 'kw-VirusOrElection',
+                    'label': "",
+                    'metadata': default_edge_metadata
+                },
+                """
+                    {
+                        'source': 'kw-NCSWIC',
+                        'target': 'kw-COVID',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+            
+                    {
+                        'source': 'kw-COVID',
+                        'target': 'kw-NewsUnlocksMap',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-NewsUnlocksMap',
+                        'target': 'kw-NOSUCHAGENCY',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-NOSUCHAGENCY',
+                        'target': 'kw-PanicInDC',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-PanicInDC',
+                        'target': 'kw-MathematicallyImpossible',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-MathematicallyImpossible',
+                        'target': 'kw-PATRIOTS',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-PATRIOTS',
+                        'target': 'kw-QANON',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-QANON',
+                        'target': 'kw-FISA',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-FISA',
+                        'target': 'kw-SESSIONS',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-SESSIONS',
+                        'target': 'kw-SNOWDEN',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-SNOWDEN',
+                        'target': 'kw-TheGreatAwakening',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-TheGreatAwakening',
+                        'target': 'kw-USMIL',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-USMIL',
+                        'target': 'kw-VirusOrElection',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-VirusOrElection',
+                        'target': 'kw-WWG1WGA',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                    {
+                        'source': 'kw-WWG1WGA',
+                        'target': 'kw-RussiaHoax',
+                        'label': "",
+                        'metadata': default_edge_metadata
+                    },
+                """
             ],
         }
     }
+
+    # Collect names of keyword nodes
+    keyword_nodes = [
+        item["graphicName"] for item in data
+        if item["graphicName"].startswith("kw-")
+    ]
+    graphics_nodes = [
+        item["graphicName"] for item in data
+        if not item["graphicName"].startswith("kw-")
+    ]
+
+    # Calculate positions for keyword nodes
+    outer_positions = calculate_positions(keyword_nodes, 1177.1)
+
+    # Calculate positions for graphics nodes with an interval of 17
+    graphics_positions = calculate_positions(graphics_nodes,
+                                             radius=360.0,
+                                             interval=5)
 
     # creating nodes
     for item in data:
@@ -1530,26 +3033,47 @@ def generate_map_v2():
         x_graphic_url = item["xGraphicURL"]
         # x_graphic_url_img = gv.convert.image_to_data_url(x_graphic_url)
 
-        graph5['graph']['nodes'][node_name] = {
-            'label': node_label,
-            'metadata': {
-                'opacity':
-                1.0,
-                'label_color':
-                highlight_color,
-                'label_size':
-                7,
-                'hover':
-                '<b>{node_label}</b><br><a href="{x_link}" target="_blank">View X post</a><br><a href="{node_img}" target="_blank">View image</a>'
-                .format(node_label=node_label,
-                        x_link=x_post_url,
-                        node_img=x_graphic_url),
-                'click':
-                x_post_url,
-                'image':
-                x_graphic_url,
+        # keywords
+        if node_name.startswith("kw-"):
+            graph5['graph']['nodes'][node_name] = {
+                'label': node_label,
+                'metadata': {
+                    'opacity': 1.0,
+                    'label_color': 'purple',
+                    'label_size': 26,
+                    'color': 'purple',
+                    'size': 36.0,
+                    'x':
+                    outer_positions[node_name]['x'],  # Use calculated position
+                    'y': outer_positions[node_name]['y'],
+                }
             }
-        }
+        else:
+            # Graphics nodes
+            graph5['graph']['nodes'][node_name] = {
+                'label': node_label,
+                'metadata': {
+                    'opacity':
+                    1.0,
+                    'label_color':
+                    highlight_color,
+                    'label_size':
+                    7,
+                    'hover':
+                    '<b><span style="font-size: 17px;">{node_label}</span></b><br><a href="{x_link}" target="_blank" style="font-size: 17px;">View X post</a><br><a href="{node_img}" target="_blank" style="font-size: 17px;">View image</a>'
+                    .format(node_label=node_label,
+                            x_link=x_post_url,
+                            node_img=x_graphic_url),
+                    'click':
+                    x_post_url,
+                    'image':
+                    x_graphic_url,
+                    'x':
+                    graphics_positions[node_name]['x'],
+                    'y':
+                    graphics_positions[node_name]['y']
+                }
+            }
 
     fig = gv.d3(
         graph5,
@@ -1557,10 +3081,13 @@ def generate_map_v2():
         node_label_data_source='label',
         edge_label_data_source='label',
         show_edge_label=True,
-        edge_curvature=0.3,
-        zoom_factor=1,
+        edge_curvature=0.11,
+        zoom_factor=0.5,
         layout_algorithm_active=True,
         node_hover_neighborhood=True,
+        use_edge_size_normalization=True,
+        edge_size_normalization_min=0.45,
+        edge_size_normalization_max=1.07,
 
         # specific for D3
         use_many_body_force=True,
@@ -1569,7 +3096,7 @@ def generate_map_v2():
         use_many_body_force_min_distance=True,
         many_body_force_min_distance=0.01,
         use_many_body_force_max_distance=True,
-        many_body_force_max_distance=2963.0,
+        many_body_force_max_distance=589.0,
         use_links_force=True,
         links_force_distance=107.00,
         links_force_strength=0.11,
@@ -1580,7 +3107,7 @@ def generate_map_v2():
         x_positioning_force_strength=0.07,
         use_y_positioning_force=True,
         y_positioning_force_strength=0.10,
-        use_centering_force=True,
+        use_centering_force=False,
     )
     # fig.display()  # opens the plot in a browser window, can be stored as SVG/JPG/PNG
     # fig.export_html(filepath='templates/index.html', overwrite=True)
