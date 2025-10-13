@@ -2,6 +2,12 @@
 
 An interactive web application that visualizes complex relationships between nodes using D3.js network graphs. Built with Flask, NetworkX, and Gravis for dynamic, force-directed graph rendering.
 
+## 📸 Visualization Preview
+
+![Network Graph Visualization](screenshots/visualization.png)
+
+*Interactive force-directed graph with cyberpunk theme: black background, purple keyword nodes on outer circle, image thumbnails in center, and green connecting edges.*
+
 ## 🌟 Features
 
 - **Interactive Visualization**: Zoom, pan, and hover over nodes to explore relationships
