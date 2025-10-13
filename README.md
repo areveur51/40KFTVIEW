@@ -2,23 +2,22 @@
 
 An interactive web application that visualizes complex relationships between nodes using D3.js network graphs. Built with Flask, NetworkX, and Gravis for dynamic, force-directed graph rendering.
 
-## 📸 Visualization Preview
-
-![Network Graph Visualization](screenshots/visualization.png)
-
-*Interactive force-directed graph with cyberpunk theme: black background, purple keyword nodes on outer circle, image thumbnails in center, and green connecting edges.*
-
 ## 🌟 Features
 
 - **Interactive Visualization**: Zoom, pan, and hover over nodes to explore relationships
 - **Dynamic Force Layout**: Automatic node positioning using D3.js force simulation
+- **Cyberpunk Theme**: Black background, purple keyword nodes, green edges, image thumbnails
 - **Two Node Types**:
-  - **Graphic Nodes**: Visual content with linked images and social media posts
+  - **Graphic Nodes**: Visual content with linked images and social media posts (center)
   - **Keyword Nodes**: Conceptual nodes positioned on the outer circle
+- **Data-Driven Architecture**: 
+  - All data externalized to JSON files
+  - 87% code reduction through DRY principles
+  - Easy to update without touching code
 - **Performance Optimized**: 
   - Graph caching to avoid regeneration on every request
   - Optimized position calculations
-  - Efficient rendering with gravis/D3.js
+  - Efficient rendering with Gravis/D3.js
 - **Responsive Design**: Works across different screen sizes
 - **Cache Control**: Proper HTTP headers to ensure fresh content delivery
 
@@ -40,19 +39,11 @@ git clone <your-repo-url>
 cd <repo-name>
 ```
 
-2. Install dependencies using one of these methods:
+2. Install dependencies:
 
-**Option A: Using pip (recommended for quick setup)**
 ```bash
 pip install -r requirements.txt
 ```
-
-**Option B: Using Poetry (for development)**
-```bash
-poetry install
-```
-
-Note: This project uses Python 3.10 or 3.11. Make sure you have a compatible version installed.
 
 ### Running the Application
 
@@ -78,36 +69,43 @@ gunicorn --bind=0.0.0.0:5000 --reuse-port main:app
 
 ```
 .
-├── main.py                 # Main Flask application with graph generation
-├── config_loader.py        # Configuration management module
-├── extract_data.py         # Utility script for data extraction
-├── templates/              # Flask templates directory
-│   └── index.html         # Generated graph visualization
-├── data/                   # Data storage directory
-├── config/                 # Configuration files
-│   └── graph_config.json  # Graph styling and layout configuration
-├── pyproject.toml         # Python project configuration
-├── Procfile               # Deployment configuration
-└── README.md              # This file
+├── main.py                          # Main Flask application (426 lines)
+├── main_old_backup.py               # Original code backup (3,108 lines)
+├── data/
+│   ├── nodes.json                   # 133 nodes with metadata
+│   ├── edges.json                   # 235 active edges
+│   ├── edges_keyword_circular_commented.json  # 16 commented edges
+│   └── README_edges.md              # Edge data documentation
+├── config/
+│   └── graph_config.json            # Visualization configuration
+├── templates/
+│   └── index.html                   # Generated graph (auto-generated)
+├── requirements.txt                 # Python dependencies
+├── pyproject.toml                   # Poetry configuration
+├── Procfile                         # Deployment configuration
+├── README.md                        # This file
+├── CLEANUP_SUMMARY.md               # Cleanup documentation
+└── REFACTORING_SUMMARY.md           # Refactoring details
 ```
 
 ## 🎨 Configuration
 
-The graph visualization can be customized by modifying the configuration in `config_loader.py` or by editing `config/graph_config.json`:
+The graph visualization can be customized by editing `config/graph_config.json`:
 
-### Color Scheme
-```python
+### Color Scheme (Cyberpunk Theme)
+```json
 {
   "colors": {
     "default_color": "black",
     "highlight_color": "green",
+    "keyword_color": "purple",
     "background_color": "#000000"
   }
 }
 ```
 
 ### Node Positioning
-```python
+```json
 {
   "positions": {
     "keyword_radius": 1177.1,
@@ -118,7 +116,7 @@ The graph visualization can be customized by modifying the configuration in `con
 ```
 
 ### Force Simulation Parameters
-```python
+```json
 {
   "visualization": {
     "many_body_force_strength": -1776.0,
@@ -127,6 +125,39 @@ The graph visualization can be customized by modifying the configuration in `con
   }
 }
 ```
+
+## 📊 Data Management
+
+### Updating Nodes
+
+Edit `data/nodes.json`:
+```json
+[
+  {
+    "graphicLabel": "YOUR LABEL",
+    "graphicName": "unique_id",
+    "xPostURL": "https://x.com/...",
+    "xGraphicURL": "https://pbs.twimg.com/..."
+  }
+]
+```
+
+### Updating Edges
+
+Edit `data/edges.json`:
+```json
+[
+  {
+    "source": "source_node_id",
+    "target": "target_node_id",
+    "label": "Relationship description"
+  }
+]
+```
+
+### Managing Commented Edges
+
+Commented edges are stored in `data/edges_keyword_circular_commented.json`. See `data/README_edges.md` for restoration instructions.
 
 ## 🔧 API Documentation
 
@@ -142,34 +173,22 @@ Serves the interactive graph visualization.
 - `Pragma: no-cache`
 - `Expires: 0`
 
-## 📊 Graph Data Structure
-
-### Node Format
-Each node contains:
-- `graphicLabel`: Display label for the node
-- `graphicName`: Unique identifier
-- `xPostURL`: Link to associated social media post (optional)
-- `xGraphicURL`: Link to associated image (optional)
-
-### Node Types
-1. **Graphic Nodes**: Standard nodes with visual content
-2. **Keyword Nodes**: Nodes prefixed with `kw-` positioned on the outer circle
-
 ## 🔄 How It Works
 
 1. **First Request**: 
-   - Server generates the graph visualization
-   - Calculates node positions using circular/spiral algorithms
-   - Creates D3.js interactive HTML output
-   - Caches the result
+   - Server loads nodes from `data/nodes.json` (133 nodes)
+   - Server loads edges from `data/edges.json` (235 edges)
+   - Calculates node positions using circular/interval algorithms
+   - Creates D3.js interactive HTML output with Gravis
+   - Caches the result in `templates/index.html`
 
 2. **Subsequent Requests**:
    - Serves cached HTML for faster load times
    - Only regenerates if cache is missing
 
 3. **Node Positioning**:
-   - Keyword nodes: Circular layout on outer radius
-   - Graphic nodes: Spiral layout on inner radius
+   - Keyword nodes: Circular layout on outer radius (1177.1 units)
+   - Graphic nodes: Interval-based layout on inner radius (360.0 units)
    - Force-directed layout for natural spacing
 
 ## 🚀 Performance Optimizations
@@ -178,54 +197,7 @@ Each node contains:
 - **Lazy Loading**: Visualization only created when needed
 - **Optimized Math**: Pre-calculated trigonometric values
 - **Efficient Data Structures**: Dictionary-based node/edge storage
-
-## 🛠️ Development
-
-### Adding New Nodes
-
-Edit the `data` array in `generate_map_v2()` function:
-
-```python
-{
-    "graphicLabel": "Your Label",
-    "graphicName": "unique_id",
-    "xPostURL": "https://...",
-    "xGraphicURL": "https://..."
-}
-```
-
-### Adding New Edges
-
-Add to the `edges` array in `graph5` dictionary:
-
-```python
-{
-    'source': 'source_node_id',
-    'target': 'target_node_id',
-    'label': 'Relationship description',
-    'metadata': default_edge_metadata
-}
-```
-
-## 📝 Code Documentation
-
-All functions include comprehensive docstrings following Google style:
-
-```python
-def function_name(arg1, arg2):
-    """
-    Brief description.
-    
-    Detailed description of what the function does.
-    
-    Args:
-        arg1 (type): Description of arg1.
-        arg2 (type): Description of arg2.
-    
-    Returns:
-        type: Description of return value.
-    """
-```
+- **87% Code Reduction**: Data-driven architecture eliminates duplication
 
 ## 🐛 Troubleshooting
 
@@ -233,6 +205,7 @@ def function_name(arg1, arg2):
 - Check browser console for JavaScript errors
 - Ensure `templates/` directory exists
 - Verify all dependencies are installed
+- Check that `data/nodes.json` and `data/edges.json` exist
 
 ### Performance Issues
 - Graph generation is CPU-intensive for first load
@@ -243,6 +216,11 @@ def function_name(arg1, arg2):
 - Clear browser cache (Ctrl+Shift+R / Cmd+Shift+R)
 - Delete `templates/index.html` to force regeneration
 - Check server logs for generation status
+
+### Data Issues
+- Validate JSON syntax in `data/nodes.json` and `data/edges.json`
+- Ensure all edge source/target IDs match actual node names
+- Check `data/README_edges.md` for edge management documentation
 
 ## 📄 License
 

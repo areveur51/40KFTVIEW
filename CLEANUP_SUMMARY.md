@@ -3,16 +3,19 @@
 ## Files Removed ✓
 
 ### Unnecessary Files & Directories
-- ✅ `attached_assets/` - User uploaded screenshots (temporary)
+- ✅ `attached_assets/` - Temporary screenshot directory
+- ✅ `screenshots/` - Screenshot directory
 - ✅ `images/` - Unused image directory
 - ✅ `templates/index_orig.html` - Old backup file (22MB)
 - ✅ `generated-icon.png` - Auto-generated file
 - ✅ `index.svg` - Auto-generated file
+- ✅ `replit.md` - Project memory file (removed)
 
-### LSP Errors Fixed
-- ✅ Fixed 4 type errors in `extract_graph_data.py`
-  - Changed `all([...])` to proper `and` checks for regex matches
-  - Resolved "group is not a known member of None" errors
+### Utility Scripts (Removed After Use)
+- ✅ `extract_graph_data.py` - Data extraction utility (no longer needed)
+- ✅ `fix_broken_links.py` - Link validation (completed)
+- ✅ `test_data_consistency.py` - Data consistency tests (completed)
+- ✅ `DATA_CONSISTENCY_REPORT.md` - Validation report (archived)
 
 ## Final Project Structure
 
@@ -25,23 +28,24 @@ project/
 │
 ├── Data & Configuration
 │   ├── data/
-│   │   ├── nodes.json             (133 nodes, 33KB)
-│   │   └── edges.json             (251 edges, 26KB)
+│   │   ├── nodes.json                              (133 nodes, 33KB)
+│   │   ├── edges.json                              (235 edges, 24KB)
+│   │   ├── edges_keyword_circular_commented.json   (16 commented edges)
+│   │   └── README_edges.md                         (edge documentation)
 │   ├── config/
-│   │   └── graph_config.json      (visualization settings)
+│   │   └── graph_config.json                       (visualization settings)
 │   └── templates/
-│       └── index.html             (generated graph, 616KB)
+│       └── index.html                              (generated graph, 616KB)
 │
-├── Utilities
-│   ├── extract_graph_data.py      (data extraction utility)
-│   ├── fix_broken_links.py        (link validation)
-│   └── test_data_consistency.py   (data consistency tests)
+├── Deployment
+│   ├── pyproject.toml              (Poetry config)
+│   ├── poetry.lock                 (locked dependencies)
+│   └── Procfile                    (deployment config)
 │
 └── Documentation
     ├── README.md                   (setup guide)
-    ├── replit.md                   (project memory)
-    ├── REFACTORING_SUMMARY.md      (refactoring details)
-    └── DATA_CONSISTENCY_REPORT.md  (validation report)
+    ├── CLEANUP_SUMMARY.md          (this file)
+    └── REFACTORING_SUMMARY.md      (refactoring details)
 ```
 
 ## Statistics
@@ -53,39 +57,56 @@ project/
 
 ### Data Size
 - **Nodes**: 33KB (133 nodes)
-- **Edges**: 26KB (251 edges)
+- **Edges**: 24KB (235 active edges)
+- **Commented Edges**: 1.2KB (16 edges)
 - **Config**: 1.4KB
 - **Total**: ~60KB
 
 ### File Count
-- **Python files**: 5 (main.py, backup, 3 utilities)
-- **Data files**: 3 (nodes, edges, config)
-- **Documentation**: 4 markdown files
+- **Python files**: 2 (main.py, main_old_backup.py)
+- **Data files**: 4 (nodes, edges, commented edges, config)
+- **Documentation**: 4 markdown files (README, 2 summaries, edge docs)
+
+## Edge Management
+
+### Active Edges
+- **File**: `data/edges.json`
+- **Count**: 235 edges
+
+### Commented Edges
+- **File**: `data/edges_keyword_circular_commented.json`
+- **Count**: 16 keyword-to-keyword circular edges
+- **Reason**: Removed to simplify visualization
+- **Restoration**: See `data/README_edges.md`
 
 ## Updated .gitignore
 
 Added exclusions for:
 - Generated templates (`templates/index.html`)
-- Temporary files (`attached_assets/`, `images/`)
+- Temporary directories (`attached_assets/`, `screenshots/`, `images/`)
 - Old backups (`templates/index_orig.html`)
 - Log files (`*.log`)
+- System files (`.cache/`, `.pythonlibs/`, etc.)
 
 ## Verification ✓
 
 All functionality verified after cleanup:
 - ✅ Server starts successfully
 - ✅ Loads 133 nodes from JSON
-- ✅ Loads 251 edges from JSON
+- ✅ Loads 235 edges from JSON
 - ✅ Generates graph visualization
-- ✅ Cyberpunk theme preserved
+- ✅ Cyberpunk theme preserved (black bg, purple keywords, green edges)
 - ✅ No LSP errors
 - ✅ No console errors
+- ✅ All unnecessary files removed
+- ✅ Clean directory structure
 
 ## Result
 
-Clean, organized project structure with:
-- Minimal file clutter
-- Clear separation of concerns
-- Easy to navigate and maintain
-- All unnecessary files removed
-- All functionality preserved
+Clean, minimal project structure with:
+- ✅ No file clutter in root directory
+- ✅ Clear separation of concerns
+- ✅ Easy to navigate and maintain
+- ✅ All functionality preserved
+- ✅ Data-driven architecture
+- ✅ 87% code reduction through DRY principles
