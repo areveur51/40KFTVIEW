@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>40,000 FT — Decode Explorer</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='explorer/app.css') }}">
 </head>
@@ -17,7 +21,7 @@
       <div id="metrics" class="metrics"></div>
       <label class="search">
         <span class="sr-only">Search decodes</span>
-        <input id="search" type="search" placeholder="SEARCH LABELS / KEYWORDS / TWEET ID" autocomplete="off">
+        <input id="search" type="search" placeholder="SEARCH LABELS / KEYWORDS / TWEET ID" autocomplete="off" enterkeyhint="search">
       </label>
       <div class="view-toggle" role="group" aria-label="Layout">
         <button id="view-constellation" class="active" type="button">SWARM</button>
@@ -92,6 +96,11 @@
         <canvas id="heat" height="110"></canvas>
       </section>
     </footer>
+    <nav id="mobile-tabs" class="mobile-tabs" aria-label="Mobile views">
+      <button type="button" data-tab="swarm" class="active">SWARM</button>
+      <button type="button" data-tab="post">POST</button>
+      <button type="button" data-tab="intel">INTEL</button>
+    </nav>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="{{ url_for('static', filename='explorer/app.js') }}"></script>

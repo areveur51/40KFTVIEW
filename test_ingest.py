@@ -152,6 +152,8 @@ class ExplorerRouteTests(unittest.TestCase):
         self.assertIn("id=\"kw-legend\"", body)
         self.assertIn("id=\"signal-gauges\"", body)
         self.assertIn("id=\"hub-list\"", body)
+        self.assertIn("id=\"mobile-tabs\"", body)
+        self.assertIn("viewport-fit=cover", body)
         self.assertIn("X POST", body)
 
     def test_catalog_api(self):

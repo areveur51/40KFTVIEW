@@ -15,6 +15,8 @@
     year: "",
     month: "",
     unlinkedOnly: false,
+    mobileTab: "swarm",
+    pinch: null,
   };
 
   const els = {
@@ -35,6 +37,7 @@
     theme: document.getElementById("theme-bars"),
     radar: document.getElementById("radar"),
     heat: document.getElementById("heat"),
+    mobileTabs: document.getElementById("mobile-tabs"),
   };
 
   const ctx = els.stage.getContext("2d");
@@ -202,7 +205,7 @@
 
   function hitTest(sx, sy, decodes, positions, size) {
     let best = null;
-    let bestDist = 18;
+    let bestDist = window.matchMedia("(pointer: coarse)").matches ? 28 : 18;
     for (const item of decodes) {
       const pos = positions.get(item.id);
       if (!pos) continue;
@@ -693,7 +696,23 @@
     `).join("") || `<div class="dim">No hubs in this filter</div>`;
   }
 
-  function inspect(item) {
+  function isNarrow() {
+    return window.matchMedia("(max-width: 820px)").matches;
+  }
+
+  function setMobileTab(tab) {
+    state.mobileTab = tab;
+    document.body.dataset.tab = tab;
+    if (els.mobileTabs) {
+      els.mobileTabs.querySelectorAll("[data-tab]").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.tab === tab);
+      });
+    }
+    state._hudSig = "";
+    requestAnimationFrame(draw);
+  }
+
+  function inspect(item, opts) {
     const next = item ? item.id : null;
     state.selected = next;
     markListSelection();
@@ -739,6 +758,7 @@
       ${relatedMarkup(item)}
     `;
     els.postView.scrollTop = 0;
+    if (opts && opts.openPost && item && isNarrow()) setMobileTab("post");
   }
 
   function showHover(item, event) {
@@ -812,15 +832,21 @@
     const kw = event.target.closest("[data-kw]");
     if (kw) return toggleKeyword(kw.dataset.kw);
     const id = event.target.closest("[data-id]");
-    if (id) return inspect(findDecode(id.dataset.id));
+    if (id) return inspect(findDecode(id.dataset.id), { openPost: true });
     const kpi = event.target.closest("[data-kpi]");
     if (kpi && kpi.dataset.kpi === "unlinked") return setUnlinkedOnly();
     if (kpi && kpi.dataset.kpi === "all") return clearFilters();
   }
 
   els.postNav.addEventListener("change", (event) => {
-    inspect(findDecode(event.target.value));
+    inspect(findDecode(event.target.value), { openPost: true });
   });
+  if (els.mobileTabs) {
+    els.mobileTabs.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-tab]");
+      if (btn) setMobileTab(btn.dataset.tab);
+    });
+  }
   els.filterStrip.addEventListener("click", onFilterClick);
   els.kwLegend.addEventListener("click", onFilterClick);
   els.kpiGrid.addEventListener("click", onFilterClick);
@@ -891,7 +917,7 @@
     if (dist < 8) {
       const rect = els.stage.getBoundingClientRect();
       const hit = hitTest(event.clientX - rect.left, event.clientY - rect.top, state._visible || [], state._positions || new Map(), state._size || { width: 0, height: 0 });
-      if (hit) inspect(hit);
+      if (hit) inspect(hit, { openPost: true });
     }
     state.dragging = false;
     state.lastPtr = null;
@@ -923,7 +949,30 @@
     event.preventDefault();
     state.distance = Math.max(420, Math.min(1800, state.distance + event.deltaY * 0.8));
   }, { passive: false });
+  els.stage.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 2) {
+      state.pinch = Math.hypot(
+        event.touches[0].clientX - event.touches[1].clientX,
+        event.touches[0].clientY - event.touches[1].clientY
+      );
+      state.dragging = false;
+    }
+  }, { passive: true });
+  els.stage.addEventListener("touchmove", (event) => {
+    if (event.touches.length !== 2 || !state.pinch) return;
+    event.preventDefault();
+    const dist = Math.hypot(
+      event.touches[0].clientX - event.touches[1].clientX,
+      event.touches[0].clientY - event.touches[1].clientY
+    );
+    state.distance = Math.max(420, Math.min(1800, state.distance + (state.pinch - dist) * 0.9));
+    state.pinch = dist;
+  }, { passive: false });
+  els.stage.addEventListener("touchend", (event) => {
+    if (event.touches.length < 2) state.pinch = null;
+  });
   window.addEventListener("resize", () => { state._hudSig = ""; draw(); });
+  document.body.dataset.tab = state.mobileTab;
 
   function tick() {
     if (!state.dragging && state.view === "constellation") {
