@@ -455,6 +455,9 @@
     els.postList.querySelectorAll(".post-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.id === state.selected);
     });
+  }
+
+  function scrollSelectedIntoView() {
     const active = els.postList.querySelector(".post-item.active");
     if (active && typeof active.scrollIntoView === "function") {
       active.scrollIntoView({ block: "nearest" });
@@ -465,14 +468,15 @@
     const ids = decodes.map((item) => item.id).join("\0");
     if (ids !== state._listIds) {
       renderPostList(decodes);
-    } else {
-      markListSelection();
     }
   }
 
   function inspect(item) {
-    state.selected = item ? item.id : null;
+    const next = item ? item.id : null;
+    const changed = next !== state.selected;
+    state.selected = next;
     markListSelection();
+    if (changed) scrollSelectedIntoView();
     if (!item) {
       els.postView.innerHTML = `<p class="dim">Select a decode to open the full X post and media here.</p>`;
       return;
