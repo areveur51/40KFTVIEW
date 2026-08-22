@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from ingest.archive import load_archive_posts, tweet_to_record
-from ingest.catalog import build_catalog, merge_inbox, save_inbox
+from ingest.catalog import build_catalog, merge_inbox, record_fingerprint, save_inbox, sha256_file
 from ingest.detect import score_decode
 from ingest.snowflake import datetime_from_snowflake, tweet_id_from_url
 
@@ -95,8 +95,37 @@ class CatalogTests(unittest.TestCase):
             ids = {item["tweet_id"] for item in inbox}
             self.assertNotIn("1801729790577086752", ids)
             self.assertIn("1999999999999999999", ids)
+            first = Path("data/inbox.json").read_text()
+            again = merge_inbox(posts)
+            self.assertEqual(again["added"], 0)
+            self.assertEqual(again["updated"], 0)
+            self.assertGreaterEqual(again["unchanged"], 1)
+            self.assertFalse(again["changed"])
+            self.assertEqual(Path("data/inbox.json").read_text(), first)
         finally:
             save_inbox(original)
+
+    def test_reimport_keeps_protected_status(self):
+        original = json.loads(Path("data/inbox.json").read_text())
+        try:
+            save_inbox([])
+            posts = load_archive_posts(FIXTURE)
+            merge_inbox(posts)
+            inbox = json.loads(Path("data/inbox.json").read_text())
+            target = next(item for item in inbox if item["tweet_id"] == "1999999999999999999")
+            target["status"] = "confirmed"
+            save_inbox(inbox)
+            again = merge_inbox(posts)
+            self.assertEqual(again["added"], 0)
+            refreshed = json.loads(Path("data/inbox.json").read_text())
+            kept = next(item for item in refreshed if item["tweet_id"] == "1999999999999999999")
+            self.assertEqual(kept["status"], "confirmed")
+            self.assertEqual(record_fingerprint(target), record_fingerprint(kept))
+        finally:
+            save_inbox(original)
+
+    def test_archive_file_hash_is_stable(self):
+        self.assertEqual(sha256_file(FIXTURE), sha256_file(FIXTURE))
 
 
 class ExplorerRouteTests(unittest.TestCase):
@@ -133,6 +162,16 @@ class ExplorerRouteTests(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertGreaterEqual(payload["decodes"], 1)
             self.assertGreaterEqual(payload["added"], 1)
+            with FIXTURE.open("rb") as handle:
+                second = self.client.post(
+                    "/api/ingest/archive",
+                    data={"archive": (handle, "tweets.js")},
+                )
+            replay = second.get_json()
+            self.assertEqual(second.status_code, 200)
+            self.assertEqual(replay["added"], 0)
+            self.assertFalse(replay["changed"])
+            self.assertIn("already applied", replay["message"])
         finally:
             save_inbox(original)
             Path("data/ingest_state.json").write_text(original_state)

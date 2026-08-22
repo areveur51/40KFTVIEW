@@ -2,45 +2,33 @@
 
 import argparse
 import sys
-from datetime import datetime, timezone
 
 from ingest import api
 from ingest.archive import load_archive_posts
-from ingest.catalog import build_catalog, load_state, merge_inbox, save_state
-
-
-def _now():
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def _update_state(source, records, extra=None):
-    state = load_state()
-    tweet_ids = [item.get("tweet_id") for item in records if item.get("tweet_id")]
-    newest = max(tweet_ids, key=lambda value: int(value)) if tweet_ids else state.get("newest_tweet_id")
-    state.update({
-        "last_sync_at": _now(),
-        "last_source": source,
-        "newest_tweet_id": newest or "",
-        "api_available": api.api_available(),
-    })
-    if extra:
-        state.update(extra)
-    save_state(state)
-    return state
+from ingest.catalog import build_catalog, merge_inbox, record_import_state, sha256_file
 
 
 def cmd_archive(args):
+    digest = sha256_file(args.path)
     posts = load_archive_posts(args.path)
     decodes = [item for item in posts if item.get("is_decode")]
-    if args.all_posts:
-        selected = posts
-    else:
-        selected = decodes
+    selected = posts if args.all_posts else decodes
     stats = merge_inbox(selected)
-    _update_state("archive", posts, extra={"archive_posts": len(posts), "archive_decodes": len(decodes)})
+    record_import_state("archive", posts, stats, extra={
+        "archive_posts": len(posts),
+        "archive_decodes": len(decodes),
+        "last_archive_sha256": digest,
+        "fetched": len(posts),
+        "api_available": api.api_available(),
+    })
     print(f"Archive posts: {len(posts)}")
     print(f"Detected decodes: {len(decodes)}")
-    print(f"Inbox added: {stats['added']}  updated: {stats['updated']}  size: {stats['inbox_size']}")
+    print(
+        f"Inbox added: {stats['added']}  updated: {stats['updated']}  "
+        f"unchanged: {stats['unchanged']}  skipped: {stats['skipped']}  size: {stats['inbox_size']}"
+    )
+    if not stats["changed"]:
+        print("Idempotent: archive already applied, inbox left unchanged.")
     return 0
 
 
@@ -67,10 +55,16 @@ def cmd_sync(args):
     decodes = [item for item in records if item.get("is_decode")]
     selected = records if args.all_posts else decodes
     stats = merge_inbox(selected)
-    _update_state(source, records)
+    record_import_state(source, records, stats, extra={
+        "fetched": len(records),
+        "api_available": api.api_available(),
+    })
     print(f"Fetched posts: {len(records)}")
     print(f"Detected decodes: {len(decodes)}")
-    print(f"Inbox added: {stats['added']}  updated: {stats['updated']}  size: {stats['inbox_size']}")
+    print(
+        f"Inbox added: {stats['added']}  updated: {stats['updated']}  "
+        f"unchanged: {stats['unchanged']}  skipped: {stats['skipped']}  size: {stats['inbox_size']}"
+    )
     return 0
 
 

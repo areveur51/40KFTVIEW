@@ -7,55 +7,61 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='explorer/app.css') }}">
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
+  <div class="hud">
+    <header class="hud-top">
       <div class="brand">
-        <span class="brand-kicker">40,000 FT</span>
-        <h1>Decode Explorer</h1>
+        <span class="live">LIVE</span>
+        <strong>40KFT</strong>
+        <span class="dim">DECODE-SWARM-01</span>
       </div>
+      <div id="metrics" class="metrics"></div>
       <label class="search">
         <span class="sr-only">Search decodes</span>
-        <input id="search" type="search" placeholder="Search labels, keywords, tweet IDs…" autocomplete="off">
+        <input id="search" type="search" placeholder="SEARCH LABELS / KEYWORDS / TWEET ID" autocomplete="off">
       </label>
       <div class="view-toggle" role="group" aria-label="Layout">
-        <button id="view-timeline" class="active" type="button">Timeline</button>
-        <button id="view-constellation" type="button">Constellation</button>
+        <button id="view-constellation" class="active" type="button">SWARM</button>
+        <button id="view-timeline" type="button">TIMELINE</button>
       </div>
       <div class="actions">
-        <button id="btn-sync" type="button" title="Pull new posts from the X API">Sync X</button>
-        <label class="file-btn" title="Import an official X archive for full history">
-          Import archive
+        <button id="btn-sync" type="button">SYNC X</button>
+        <label class="file-btn">
+          IMPORT ARCHIVE
           <input id="archive-file" type="file" accept=".zip,.js">
         </label>
-        <a class="ghost" href="/classic">Classic graph</a>
+        <a class="ghost" href="/classic">CLASSIC</a>
       </div>
     </header>
 
-    <section class="filters" aria-label="Keyword filters">
-      <div id="stats" class="stats"></div>
-      <div id="keyword-chips" class="chips"></div>
-    </section>
-
-    <main class="stage">
-      <div class="canvas-wrap">
-        <canvas id="stage"></canvas>
-        <div id="hover-card" class="hover-card hidden"></div>
-        <div id="empty-state" class="empty hidden"></div>
-      </div>
-      <aside class="inspector">
-        <div id="inspector">
-          <p class="muted">Select a decode from the list or the map. Edges only draw for the active neighborhood so the map stays readable as history grows.</p>
-        </div>
-        <div id="results" class="results" aria-label="Visible decodes"></div>
-      </aside>
+    <main class="viewport">
+      <canvas id="stage"></canvas>
+      <div id="float-label" class="float-label hidden"></div>
+      <div id="empty-state" class="empty hidden"></div>
     </main>
 
-    <footer class="timeline-rail">
-      <div class="rail-meta">
-        <span id="range-label"></span>
-        <button id="reset-range" type="button">Reset range</button>
-      </div>
-      <canvas id="histogram" height="72"></canvas>
+    <footer class="hud-bottom">
+      <section class="panel">
+        <h2>RUN LOG</h2>
+        <div id="run-log" class="log"></div>
+      </section>
+      <section class="panel">
+        <h2>THEME LOAD</h2>
+        <canvas id="theme-bars" height="110"></canvas>
+      </section>
+      <section class="panel">
+        <h2>BLAST RADIUS</h2>
+        <canvas id="radar" height="110"></canvas>
+      </section>
+      <section class="panel">
+        <h2>ACTION HEAT</h2>
+        <canvas id="heat" height="110"></canvas>
+      </section>
+      <section class="panel inspect-panel">
+        <h2>INSPECT</h2>
+        <div id="inspector" class="inspect">
+          <p class="dim">Select a node. Neighborhood edges light; the rest stay in the fog.</p>
+        </div>
+      </section>
     </footer>
   </div>
   <div id="toast" class="toast hidden" role="status"></div>

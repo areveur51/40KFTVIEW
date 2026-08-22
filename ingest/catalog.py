@@ -1,6 +1,8 @@
 """Assemble a time-aware decode catalog from nodes, edges, and inbox."""
 
+import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +15,24 @@ EDGES_FILE = DATA_DIR / "edges.json"
 INBOX_FILE = DATA_DIR / "inbox.json"
 STATE_FILE = DATA_DIR / "ingest_state.json"
 ACCOUNT = "areveur51"
+PROTECTED_STATUSES = frozenset({"confirmed", "rejected"})
+RECORD_FIELDS = (
+    "tweet_id",
+    "created_at",
+    "text",
+    "xPostURL",
+    "xGraphicURL",
+    "media",
+    "is_reply",
+    "is_retweet",
+    "source",
+    "score",
+    "is_decode",
+    "reasons",
+    "keywords",
+    "status",
+    "imported_at",
+)
 
 
 def load_json(path, default=None):
@@ -24,11 +44,41 @@ def load_json(path, default=None):
 
 
 def save_json(path, payload):
+    """Atomically write JSON so a crashed import cannot leave a half file."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
         handle.write("\n")
+    os.replace(tmp, path)
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def canonicalize_record(record):
+    """Keep inbox rows in a stable field order for identical re-imports."""
+    return {key: record[key] for key in RECORD_FIELDS if key in record}
+
+
+def record_fingerprint(record):
+    media = record.get("media") or []
+    media_urls = ",".join(item.get("url") or "" for item in media if isinstance(item, dict))
+    return "|".join((
+        str(record.get("tweet_id") or ""),
+        str(record.get("created_at") or ""),
+        str(record.get("text") or ""),
+        str(record.get("xGraphicURL") or ""),
+        media_urls,
+        "1" if record.get("is_decode") else "0",
+        str(record.get("score") or ""),
+    ))
 
 
 def load_inbox():
@@ -64,27 +114,119 @@ def _existing_tweet_ids(nodes):
 
 
 def merge_inbox(new_records, existing_nodes=None):
-    """Insert unseen records into inbox.json, keyed by tweet id."""
+    """
+    Merge records into inbox.json by tweet id.
+
+    Re-running the same archive is a no-op: identical rows stay byte-stable,
+    protected statuses (confirmed/rejected) are never overwritten, and the
+    file is rewritten only when something actually changed.
+    """
     nodes = existing_nodes if existing_nodes is not None else load_json(NODES_FILE, default=[])
     known = _existing_tweet_ids(nodes)
     inbox = load_inbox()
-    by_id = {item.get("tweet_id"): item for item in inbox if item.get("tweet_id")}
+    by_id = {}
+    for item in inbox:
+        tweet_id = item.get("tweet_id")
+        if tweet_id and tweet_id not in by_id:
+            by_id[tweet_id] = item
+
     added = 0
     updated = 0
+    unchanged = 0
+    skipped = 0
+    seen_input = set()
+
     for record in new_records:
         tweet_id = record.get("tweet_id")
-        if not tweet_id or tweet_id in known:
+        if not tweet_id or tweet_id in seen_input:
+            skipped += 1
             continue
-        if tweet_id in by_id:
-            by_id[tweet_id].update(record)
-            updated += 1
-        else:
-            by_id[tweet_id] = record
+        seen_input.add(tweet_id)
+        if tweet_id in known:
+            skipped += 1
+            continue
+
+        incoming = canonicalize_record(record)
+        existing = by_id.get(tweet_id)
+        if existing is None:
+            incoming["imported_at"] = incoming.get("imported_at") or isoformat_utc(datetime.now(timezone.utc))
+            by_id[tweet_id] = canonicalize_record(incoming)
             added += 1
-    merged = list(by_id.values())
-    merged.sort(key=lambda item: item.get("created_at") or "", reverse=True)
-    save_inbox(merged)
-    return {"added": added, "updated": updated, "inbox_size": len(merged)}
+            continue
+
+        merged_row = dict(existing)
+        incoming_status = incoming.get("status")
+        existing_status = existing.get("status")
+        for key, value in incoming.items():
+            if key in {"status", "imported_at"}:
+                continue
+            merged_row[key] = value
+        if existing_status in PROTECTED_STATUSES:
+            merged_row["status"] = existing_status
+        elif incoming_status:
+            merged_row["status"] = incoming_status
+        if existing.get("imported_at"):
+            merged_row["imported_at"] = existing["imported_at"]
+        merged_row = canonicalize_record(merged_row)
+
+        if record_fingerprint(existing) == record_fingerprint(merged_row) and existing.get("status") == merged_row.get("status"):
+            unchanged += 1
+            continue
+        by_id[tweet_id] = merged_row
+        updated += 1
+
+    merged = [canonicalize_record(item) for item in by_id.values()]
+    merged.sort(key=lambda item: (item.get("created_at") or "", item.get("tweet_id") or ""), reverse=True)
+    previous = [canonicalize_record(item) for item in inbox]
+    previous.sort(key=lambda item: (item.get("created_at") or "", item.get("tweet_id") or ""), reverse=True)
+    changed = added > 0 or updated > 0 or previous != merged
+    if previous != merged:
+        save_inbox(merged)
+    return {
+        "added": added,
+        "updated": updated,
+        "unchanged": unchanged,
+        "skipped": skipped,
+        "inbox_size": len(merged),
+        "changed": changed,
+    }
+
+
+def append_event(event):
+    state = load_state()
+    events = list(state.get("events") or [])
+    events.append(event)
+    state["events"] = events[-40:]
+    save_state(state)
+    return state
+
+
+def record_import_state(source, records, stats, extra=None):
+    """Update ingest state without rewriting it on a no-op re-import."""
+    state = load_state()
+    now = isoformat_utc(datetime.now(timezone.utc))
+    tweet_ids = [item.get("tweet_id") for item in records if item.get("tweet_id")]
+    newest = max(tweet_ids, key=lambda value: int(value)) if tweet_ids else state.get("newest_tweet_id")
+    state["last_checked_at"] = now
+    state["last_source"] = source
+    state["newest_tweet_id"] = newest or state.get("newest_tweet_id") or ""
+    if extra:
+        state.update(extra)
+    if stats.get("changed"):
+        state["last_sync_at"] = now
+    events = list(state.get("events") or [])
+    events.append({
+        "at": now,
+        "source": source,
+        "added": stats.get("added", 0),
+        "updated": stats.get("updated", 0),
+        "unchanged": stats.get("unchanged", 0),
+        "skipped": stats.get("skipped", 0),
+        "fetched": extra.get("fetched") if extra else len(records),
+    })
+    state["events"] = events[-40:]
+    save_state(state)
+    return state
 
 
 def _node_created_at(node):
@@ -232,9 +374,12 @@ def build_catalog():
         },
         "ingest": {
             "last_sync_at": state.get("last_sync_at") or "",
+            "last_checked_at": state.get("last_checked_at") or "",
             "last_source": state.get("last_source") or "",
             "newest_tweet_id": state.get("newest_tweet_id") or "",
             "api_available": bool(state.get("api_available")),
+            "last_archive_sha256": state.get("last_archive_sha256") or "",
+            "events": state.get("events") or [],
         },
         "keywords": keywords,
         "decodes": decodes,

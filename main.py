@@ -13,7 +13,7 @@ import json
 import math
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 import logging
 
@@ -22,7 +22,7 @@ from flask import Flask, Response, jsonify, make_response, render_template, requ
 
 from ingest import api as x_api
 from ingest.archive import load_archive_posts
-from ingest.catalog import build_catalog, load_state, merge_inbox, save_state
+from ingest.catalog import build_catalog, load_state, merge_inbox, record_import_state, sha256_file
 
 # Configure logging
 logging.basicConfig(
@@ -415,18 +415,17 @@ def _ensure_classic_graph() -> None:
         logger.info(f'Graph generated successfully at {_generation_time}')
 
 
-def _stamp_sync_state(source, records):
-    state = load_state()
-    tweet_ids = [item.get("tweet_id") for item in records if item.get("tweet_id")]
-    newest = max(tweet_ids, key=lambda value: int(value)) if tweet_ids else state.get("newest_tweet_id")
-    state.update({
-        "last_sync_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "last_source": source,
-        "newest_tweet_id": newest or "",
-        "api_available": x_api.api_available(),
-    })
-    save_state(state)
-    return state
+def _import_message(kind, posts, decodes, stats):
+    if not stats.get("changed"):
+        return (
+            f"{kind} already applied. {stats['unchanged']} unchanged, "
+            f"{stats['skipped']} already in catalog. Inbox left as-is."
+        )
+    return (
+        f"{kind} scanned {len(posts)} posts, detected {len(decodes)} decodes, "
+        f"added {stats['added']}, updated {stats['updated']}, "
+        f"skipped {stats['skipped']}."
+    )
 
 
 @app.route('/')
@@ -490,17 +489,17 @@ def api_sync():
 
     decodes = [item for item in records if item.get("is_decode")]
     stats = merge_inbox(decodes)
-    _stamp_sync_state(source, records)
+    record_import_state(source, records, stats, extra={
+        "fetched": len(records),
+        "api_available": x_api.api_available(),
+    })
     return jsonify({
         "ok": True,
         "source": source,
         "fetched": len(records),
         "decodes": len(decodes),
         **stats,
-        "message": (
-            f"Synced {len(records)} posts, detected {len(decodes)} decodes, "
-            f"added {stats['added']} new inbox items."
-        ),
+        "message": _import_message("Sync", records, decodes, stats),
     })
 
 
@@ -520,6 +519,8 @@ def api_ingest_archive():
         uploaded.save(tmp.name)
         temp_path = tmp.name
     try:
+        digest = sha256_file(temp_path)
+        state = load_state()
         posts = load_archive_posts(temp_path)
     except (ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
         return jsonify({"ok": False, "error": "bad_archive", "message": str(exc)}), 400
@@ -531,17 +532,24 @@ def api_ingest_archive():
 
     decodes = [item for item in posts if item.get("is_decode")]
     stats = merge_inbox(decodes)
-    _stamp_sync_state("archive", posts)
+    record_import_state("archive", posts, stats, extra={
+        "archive_posts": len(posts),
+        "archive_decodes": len(decodes),
+        "last_archive_sha256": digest,
+        "last_archive_name": uploaded.filename,
+        "fetched": len(posts),
+        "api_available": x_api.api_available(),
+        "same_file": state.get("last_archive_sha256") == digest,
+    })
     return jsonify({
         "ok": True,
         "source": "archive",
         "fetched": len(posts),
         "decodes": len(decodes),
+        "sha256": digest,
+        "same_file": state.get("last_archive_sha256") == digest,
         **stats,
-        "message": (
-            f"Archive scanned {len(posts)} posts, detected {len(decodes)} decodes, "
-            f"added {stats['added']} new inbox items."
-        ),
+        "message": _import_message("Archive", posts, decodes, stats),
     })
 
 

@@ -1,47 +1,54 @@
 (() => {
   const state = {
     catalog: null,
-    view: "timeline",
+    view: "constellation",
     query: "",
-    keywords: new Set(),
-    range: null,
     selected: null,
     hover: null,
-    camera: { x: 0, y: 0, scale: 1 },
+    yaw: 0.35,
+    pitch: 0.18,
+    distance: 980,
     dragging: false,
     lastPtr: null,
-    brush: null,
-    fitToken: "",
+    logs: [],
   };
 
   const els = {
     search: document.getElementById("search"),
-    stats: document.getElementById("stats"),
-    chips: document.getElementById("keyword-chips"),
+    metrics: document.getElementById("metrics"),
     stage: document.getElementById("stage"),
-    histogram: document.getElementById("histogram"),
     inspector: document.getElementById("inspector"),
-    results: document.getElementById("results"),
-    hover: document.getElementById("hover-card"),
+    floatLabel: document.getElementById("float-label"),
     empty: document.getElementById("empty-state"),
-    rangeLabel: document.getElementById("range-label"),
     toast: document.getElementById("toast"),
     archive: document.getElementById("archive-file"),
+    runLog: document.getElementById("run-log"),
+    theme: document.getElementById("theme-bars"),
+    radar: document.getElementById("radar"),
+    heat: document.getElementById("heat"),
   };
 
   const ctx = els.stage.getContext("2d");
-  const hctx = els.histogram.getContext("2d");
+  const themeCtx = els.theme.getContext("2d");
+  const radarCtx = els.radar.getContext("2d");
+  const heatCtx = els.heat.getContext("2d");
 
-  const GREEN = "#3dff7a";
-  const PURPLE = "#c084fc";
-  const AMBER = "#f5c15a";
-  const MUTED = "#8b8b9a";
+  const CYAN = "#6ef3ff";
+  const MAGENTA = "#ff3cac";
+  const AMBER = "#ffc14a";
+  const WHITE = "#f4f4f4";
 
   function toast(message) {
     els.toast.textContent = message;
     els.toast.classList.remove("hidden");
     clearTimeout(toast._t);
     toast._t = setTimeout(() => els.toast.classList.add("hidden"), 4200);
+  }
+
+  function log(message, kind) {
+    state.logs.unshift({ at: new Date().toISOString().slice(11, 19), message, kind: kind || "" });
+    state.logs = state.logs.slice(0, 24);
+    renderLog();
   }
 
   function parseTime(value) {
@@ -51,119 +58,91 @@
   }
 
   function visibleDecodes() {
-    const catalog = state.catalog;
-    if (!catalog) return [];
+    if (!state.catalog) return [];
     const q = state.query.trim().toLowerCase();
-    return catalog.decodes.filter((item) => {
-      if (state.keywords.size) {
-        const hit = (item.keyword_ids || []).some((id) => state.keywords.has(id));
-        if (!hit) return false;
-      }
-      if (state.range) {
-        const t = parseTime(item.created_at);
-        if (t == null || t < state.range[0] || t > state.range[1]) return false;
-      }
+    return state.catalog.decodes.filter((item) => {
       if (!q) return true;
       return (item.search_text || "").includes(q) || (item.tweet_id || "").includes(q);
     });
   }
 
-  function monthKey(ms) {
-    const d = new Date(ms);
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-  }
-
-  function buildMonths(decodes) {
-    const catalog = state.catalog;
-    const min = parseTime(catalog.range.min) || Date.now();
-    const max = Math.max(parseTime(catalog.range.max) || Date.now(), Date.now());
-    const start = new Date(Date.UTC(new Date(min).getUTCFullYear(), new Date(min).getUTCMonth(), 1));
-    const end = new Date(Date.UTC(new Date(max).getUTCFullYear(), new Date(max).getUTCMonth(), 1));
-    const months = [];
-    for (let cursor = start; cursor <= end; cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))) {
-      months.push({
-        key: monthKey(cursor.getTime()),
-        start: cursor.getTime(),
-        end: Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0, 23, 59, 59),
-        count: 0,
-      });
-    }
-    const index = Object.fromEntries(months.map((item, i) => [item.key, i]));
-    for (const decode of decodes) {
-      const t = parseTime(decode.created_at);
-      if (t == null) continue;
-      const i = index[monthKey(t)];
-      if (i != null) months[i].count += 1;
-    }
-    return months;
+  function hash(value) {
+    return Array.from(String(value)).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   }
 
   function layout(decodes) {
     const keywords = state.catalog.keywords;
     const positions = new Map();
-    if (state.view === "constellation") {
-      const radius = 420;
-      keywords.forEach((kw, i) => {
-        const angle = (Math.PI * 2 * i) / Math.max(keywords.length, 1) - Math.PI / 2;
-        positions.set(kw.id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, kind: "keyword" });
+    if (state.view === "timeline") {
+      const lanes = ["unlinked", ...keywords.map((kw) => kw.id)];
+      const laneIndex = Object.fromEntries(lanes.map((id, i) => [id, i]));
+      const times = decodes.map((item) => parseTime(item.created_at)).filter((v) => v != null);
+      const min = Math.min(...times, parseTime(state.catalog.range.min) || Date.now());
+      const max = Math.max(...times, Date.now());
+      const span = Math.max(max - min, 1);
+      keywords.forEach((kw) => {
+        const lane = laneIndex[kw.id];
+        positions.set(kw.id, {
+          x: -620,
+          y: (lane / Math.max(lanes.length - 1, 1)) * 720 - 360,
+          z: 0,
+          kind: "keyword",
+        });
       });
-      decodes.forEach((item, i) => {
-        const kws = item.keyword_ids || [];
-        let x = 0;
-        let y = 0;
-        if (kws.length) {
-          kws.forEach((id) => {
-            const p = positions.get(id);
-            if (!p) return;
-            x += p.x * 0.62;
-            y += p.y * 0.62;
-          });
-          x /= kws.length;
-          y /= kws.length;
-        }
-        const hash = Array.from(item.id).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-        const ring = 70 + (i % 7) * 18;
-        const a = (hash % 360) * (Math.PI / 180);
+      decodes.forEach((item) => {
+        const t = parseTime(item.created_at) || min;
+        const laneId = (item.keyword_ids && item.keyword_ids[0]) || "unlinked";
+        const lane = laneIndex[laneId] ?? 0;
         positions.set(item.id, {
-          x: x + Math.cos(a) * ring,
-          y: y + Math.sin(a) * ring,
+          x: -420 + ((t - min) / span) * 1400,
+          y: (lane / Math.max(lanes.length - 1, 1)) * 720 - 360 + ((hash(item.id) % 17) - 8) * 4,
+          z: 0,
           kind: "decode",
         });
       });
       return positions;
     }
 
-    const lanes = ["unlinked", ...keywords.map((kw) => kw.id)];
-    const laneIndex = Object.fromEntries(lanes.map((id, i) => [id, i]));
-    const times = decodes.map((item) => parseTime(item.created_at)).filter((v) => v != null);
-    const min = Math.min(...times, parseTime(state.catalog.range.min) || Date.now());
-    const max = Math.max(...times, Date.now());
-    const span = Math.max(max - min, 1);
-    const width = 1400;
-    keywords.forEach((kw) => {
-      const lane = laneIndex[kw.id];
+    keywords.forEach((kw, i) => {
+      const a = (i / Math.max(keywords.length, 1)) * Math.PI * 2 - Math.PI / 2;
+      const r = 430;
       positions.set(kw.id, {
-        x: 20,
-        y: (lane / Math.max(lanes.length - 1, 1)) * 720 - 360,
+        x: Math.cos(a) * r,
+        y: Math.sin(a * 1.7) * 90,
+        z: Math.sin(a) * r,
         kind: "keyword",
       });
     });
-    decodes.forEach((item) => {
-      const t = parseTime(item.created_at) || min;
-      const laneId = (item.keyword_ids && item.keyword_ids[0]) || "unlinked";
-      const lane = laneIndex[laneId] ?? 0;
-      const hash = Array.from(item.id).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-      const jitter = ((hash % 17) - 8) * 4;
+    decodes.forEach((item, i) => {
+      const kws = item.keyword_ids || [];
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      if (kws.length) {
+        kws.forEach((id) => {
+          const p = positions.get(id);
+          if (!p) return;
+          x += p.x * 0.58;
+          y += p.y * 0.58;
+          z += p.z * 0.58;
+        });
+        x /= kws.length;
+        y /= kws.length;
+        z /= kws.length;
+      }
+      const a = (hash(item.id) % 360) * (Math.PI / 180);
+      const ring = 55 + (i % 9) * 16;
       positions.set(item.id, {
-        x: 260 + ((t - min) / span) * width,
-        y: (lane / Math.max(lanes.length - 1, 1)) * 720 - 360 + jitter,
+        x: x + Math.cos(a) * ring,
+        y: y + Math.sin(a * 1.3) * 36,
+        z: z + Math.sin(a) * ring,
         kind: "decode",
       });
     });
     return positions;
   }
 
-  function resizeCanvas(canvas, context) {
+  function resize(canvas, context) {
     const ratio = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = Math.max(1, Math.floor(rect.width * ratio));
@@ -172,29 +151,34 @@
     return { width: rect.width, height: rect.height };
   }
 
-  function worldToScreen(point, size) {
+  function project(point, size) {
+    const cy = Math.cos(state.yaw);
+    const sy = Math.sin(state.yaw);
+    const cp = Math.cos(state.pitch);
+    const sp = Math.sin(state.pitch);
+    const x1 = point.x * cy - point.z * sy;
+    const z1 = point.x * sy + point.z * cy;
+    const y1 = point.y * cp - z1 * sp;
+    const z2 = point.y * sp + z1 * cp;
+    const f = state.distance / (state.distance + z2 + 260);
     return {
-      x: size.width / 2 + (point.x - state.camera.x) * state.camera.scale,
-      y: size.height / 2 + (point.y - state.camera.y) * state.camera.scale,
-    };
-  }
-
-  function screenToWorld(sx, sy, size) {
-    return {
-      x: state.camera.x + (sx - size.width / 2) / state.camera.scale,
-      y: state.camera.y + (sy - size.height / 2) / state.camera.scale,
+      x: size.width / 2 + x1 * f,
+      y: size.height / 2 + y1 * f,
+      z: z2,
+      f,
     };
   }
 
   function hitTest(sx, sy, decodes, positions, size) {
     let best = null;
-    let bestDist = 22;
+    let bestDist = 18;
     for (const item of decodes) {
       const pos = positions.get(item.id);
       if (!pos) continue;
-      const screen = worldToScreen(pos, size);
+      const screen = project(pos, size);
       const dist = Math.hypot(screen.x - sx, screen.y - sy);
-      if (dist < bestDist) {
+      const radius = 10 * screen.f;
+      if (dist < Math.max(bestDist, radius)) {
         best = item;
         bestDist = dist;
       }
@@ -202,35 +186,77 @@
     return best;
   }
 
+  function drawGlow(x, y, radius, color, alpha) {
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   function draw() {
     if (!state.catalog) return;
     const decodes = visibleDecodes();
     const positions = layout(decodes);
-    maybeFit(decodes, positions);
-    const size = resizeCanvas(els.stage, ctx);
+    const size = resize(els.stage, ctx);
     ctx.clearRect(0, 0, size.width, size.height);
 
-    els.empty.classList.toggle("hidden", decodes.length > 0);
-    if (!decodes.length) {
-      els.empty.textContent = "No decodes match this search or time range.";
+    const grid = 46;
+    ctx.strokeStyle = "rgba(110,243,255,0.05)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x < size.width; x += grid) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, size.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < size.height; y += grid) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(size.width, y);
+      ctx.stroke();
     }
 
-    const selected = decodes.find((item) => item.id === state.selected);
+    els.empty.classList.toggle("hidden", decodes.length > 0);
+    if (!decodes.length) els.empty.textContent = "NO DECODES MATCH THIS SEARCH.";
+
+    const selected = decodes.find((item) => item.id === state.selected) || null;
     const neighborIds = new Set();
     if (selected) {
       (selected.connections || []).forEach((id) => neighborIds.add(id));
       (selected.keyword_ids || []).forEach((id) => neighborIds.add(id));
     }
 
+    if (state.view === "constellation") {
+      ctx.strokeStyle = "rgba(244,244,244,0.045)";
+      ctx.lineWidth = 0.6;
+      const kws = state.catalog.keywords;
+      for (let i = 0; i < kws.length; i += 1) {
+        const a = positions.get(kws[i].id);
+        const b = positions.get(kws[(i + 1) % kws.length].id);
+        if (!a || !b) continue;
+        const pa = project(a, size);
+        const pb = project(b, size);
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.stroke();
+      }
+    }
+
     if (selected) {
-      ctx.lineWidth = 1.2;
-      ctx.strokeStyle = "rgba(61,255,122,0.55)";
       const origin = positions.get(selected.id);
-      const originS = origin ? worldToScreen(origin, size) : null;
+      const originS = origin ? project(origin, size) : null;
+      ctx.strokeStyle = "rgba(110,243,255,0.55)";
+      ctx.lineWidth = 1;
       for (const other of [...(selected.connections || []), ...(selected.keyword_ids || [])]) {
         const dest = positions.get(other);
         if (!originS || !dest) continue;
-        const end = worldToScreen(dest, size);
+        const end = project(dest, size);
         ctx.beginPath();
         ctx.moveTo(originS.x, originS.y);
         ctx.lineTo(end.x, end.y);
@@ -238,209 +264,209 @@
       }
     }
 
-    for (const kw of state.catalog.keywords) {
-      const pos = positions.get(kw.id);
-      if (!pos) continue;
-      const screen = worldToScreen(pos, size);
-      ctx.fillStyle = PURPLE;
-      ctx.beginPath();
-      ctx.arc(screen.x, screen.y, state.view === "timeline" ? 5 : 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = PURPLE;
-      ctx.font = "12px ui-sans-serif, system-ui";
-      ctx.fillText(kw.label, screen.x + 10, screen.y + 4);
-    }
+    const drawables = [
+      ...state.catalog.keywords.map((kw) => ({ item: kw, pos: positions.get(kw.id), kind: "keyword" })),
+      ...decodes.map((item) => ({ item, pos: positions.get(item.id), kind: "decode" })),
+    ].filter((entry) => entry.pos);
+    drawables.sort((a, b) => project(a.pos, size).z - project(b.pos, size).z);
 
-    for (const item of decodes) {
-      const pos = positions.get(item.id);
-      if (!pos) continue;
-      const screen = worldToScreen(pos, size);
+    for (const entry of drawables) {
+      const screen = project(entry.pos, size);
+      if (entry.kind === "keyword") {
+        drawGlow(screen.x, screen.y, 18 * screen.f, MAGENTA, 0.55);
+        ctx.fillStyle = MAGENTA;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, 3.4 * screen.f, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = MAGENTA;
+        ctx.font = "11px ui-monospace, monospace";
+        ctx.fillText(entry.item.label, screen.x + 8, screen.y - 6);
+        continue;
+      }
+      const item = entry.item;
       const active = item.id === state.selected || item.id === (state.hover && state.hover.id);
-      const radius = active ? 7 : 4.5;
-      ctx.fillStyle = item.status === "candidate" ? AMBER : GREEN;
-      ctx.globalAlpha = selected && item.id !== selected.id && !neighborIds.has(item.id) ? 0.28 : 1;
+      const dim = selected && item.id !== selected.id && !neighborIds.has(item.id);
+      const color = item.status === "candidate" ? AMBER : CYAN;
+      ctx.globalAlpha = dim ? 0.18 : 1;
+      drawGlow(screen.x, screen.y, (active ? 16 : 9) * screen.f, color, active ? 0.8 : 0.35);
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
+      ctx.arc(screen.x, screen.y, (active ? 4.2 : 2.4) * screen.f, 0, Math.PI * 2);
       ctx.fill();
-      if (active || decodes.length <= 24) {
-        ctx.fillStyle = item.status === "candidate" ? AMBER : GREEN;
-        ctx.font = "11px ui-sans-serif, system-ui";
-        ctx.fillText((item.label || "").slice(0, 28), screen.x + 10, screen.y + 4);
+      if (active) {
+        ctx.fillStyle = WHITE;
+        ctx.font = "11px ui-monospace, monospace";
+        ctx.fillText((item.label || "").slice(0, 32), screen.x + 8, screen.y + 4);
       }
       ctx.globalAlpha = 1;
     }
 
-    drawHistogram();
-    updateMeta(decodes);
+    updateHud(decodes, selected);
     state._positions = positions;
     state._size = size;
     state._visible = decodes;
   }
 
-  function drawHistogram() {
-    const months = buildMonths(visibleDecodes());
-    const size = resizeCanvas(els.histogram, hctx);
-    hctx.clearRect(0, 0, size.width, size.height);
-    if (!months.length) return;
-    const max = Math.max(1, ...months.map((item) => item.count));
-    const gap = 2;
-    const barW = Math.max(3, (size.width - months.length * gap) / months.length);
-    months.forEach((month, i) => {
-      const h = (month.count / max) * (size.height - 8);
-      const x = i * (barW + gap);
-      const inRange = !state.range || (month.end >= state.range[0] && month.start <= state.range[1]);
-      hctx.fillStyle = month.count === 0 ? "#191926" : inRange ? GREEN : "#2a2a38";
-      hctx.globalAlpha = month.count === 0 ? 0.7 : 0.85;
-      hctx.fillRect(x, size.height - h - 2, barW, Math.max(2, h));
-    });
-    hctx.globalAlpha = 1;
-    state._months = months;
-    state._histSize = size;
-  }
-
-  function updateMeta(decodes) {
+  function updateHud(decodes, selected) {
     const counts = state.catalog.counts;
-    els.stats.textContent = `${decodes.length} showing · ${counts.confirmed} confirmed · ${counts.candidates} candidates`;
-    const min = state.range ? new Date(state.range[0]) : new Date(state.catalog.range.min);
-    const max = state.range ? new Date(state.range[1]) : new Date(state.catalog.range.max || Date.now());
-    const fmt = (d) => Number.isNaN(d.getTime()) ? "—" : d.toISOString().slice(0, 10);
-    els.rangeLabel.textContent = `${fmt(min)} → ${fmt(max)}  ·  @${state.catalog.account}`;
-    renderResults(decodes);
-  }
-
-  function renderResults(decodes) {
-    const rows = decodes
-      .slice()
-      .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
-      .slice(0, 80)
-      .map((item) => `
-        <button type="button" class="result${item.id === state.selected ? " active" : ""}" data-id="${item.id}">
-          <span class="dot ${item.status}"></span>
-          <span>${item.label}</span>
-          <span class="muted">${(item.created_at || "").slice(0, 10)}</span>
-        </button>
-      `)
-      .join("");
-    els.results.innerHTML = rows || `<p class="muted">No matching decodes.</p>`;
-  }
-
-  function renderChips() {
-    els.chips.innerHTML = "";
-    for (const kw of state.catalog.keywords) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `chip${state.keywords.has(kw.id) ? " active" : ""}`;
-      btn.textContent = kw.label;
-      btn.addEventListener("click", () => {
-        if (state.keywords.has(kw.id)) state.keywords.delete(kw.id);
-        else state.keywords.add(kw.id);
-        renderChips();
-        draw();
-      });
-      els.chips.appendChild(btn);
+    els.metrics.textContent = `DECODES ${counts.confirmed}   CANDIDATES ${counts.candidates}   SHOWING ${decodes.length}   EDGES ${counts.edges}`;
+    drawTheme(decodes);
+    drawRadar(decodes);
+    drawHeat(decodes);
+    if (!selected && !state.selected) {
+      // keep existing inspector if already populated for an off-filter selection
     }
+  }
+
+  function drawTheme(decodes) {
+    const size = resize(els.theme, themeCtx);
+    themeCtx.clearRect(0, 0, size.width, size.height);
+    const counts = state.catalog.keywords.map((kw) => ({
+      label: kw.label,
+      n: decodes.filter((item) => (item.keyword_ids || []).includes(kw.id)).length,
+    })).sort((a, b) => b.n - a.n).slice(0, 6);
+    const max = Math.max(1, ...counts.map((item) => item.n));
+    counts.forEach((item, i) => {
+      const y = 6 + i * 16;
+      const w = (item.n / max) * (size.width - 88);
+      themeCtx.fillStyle = MAGENTA;
+      themeCtx.fillRect(80, y, Math.max(2, w), 8);
+      themeCtx.fillStyle = WHITE;
+      themeCtx.font = "10px ui-monospace, monospace";
+      themeCtx.fillText(item.label.slice(0, 10), 0, y + 8);
+      themeCtx.fillStyle = CYAN;
+      themeCtx.fillText(String(item.n), size.width - 18, y + 8);
+    });
+  }
+
+  function drawRadar(decodes) {
+    const size = resize(els.radar, radarCtx);
+    radarCtx.clearRect(0, 0, size.width, size.height);
+    const axes = state.catalog.keywords.slice(0, 6);
+    const cx = size.width / 2;
+    const cy = size.height / 2 + 4;
+    const r = Math.min(cx, cy) - 16;
+    const counts = axes.map((kw) => decodes.filter((item) => (item.keyword_ids || []).includes(kw.id)).length);
+    const max = Math.max(1, ...counts);
+    radarCtx.strokeStyle = "rgba(255,60,172,0.35)";
+    for (let ring = 1; ring <= 3; ring += 1) {
+      radarCtx.beginPath();
+      axes.forEach((_, i) => {
+        const a = (i / axes.length) * Math.PI * 2 - Math.PI / 2;
+        const x = cx + Math.cos(a) * r * (ring / 3);
+        const y = cy + Math.sin(a) * r * (ring / 3);
+        if (i === 0) radarCtx.moveTo(x, y);
+        else radarCtx.lineTo(x, y);
+      });
+      radarCtx.closePath();
+      radarCtx.stroke();
+    }
+    radarCtx.beginPath();
+    radarCtx.fillStyle = "rgba(110,243,255,0.18)";
+    radarCtx.strokeStyle = CYAN;
+    counts.forEach((n, i) => {
+      const a = (i / axes.length) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(a) * r * (n / max);
+      const y = cy + Math.sin(a) * r * (n / max);
+      if (i === 0) radarCtx.moveTo(x, y);
+      else radarCtx.lineTo(x, y);
+    });
+    radarCtx.closePath();
+    radarCtx.fill();
+    radarCtx.stroke();
+  }
+
+  function drawHeat(decodes) {
+    const size = resize(els.heat, heatCtx);
+    heatCtx.clearRect(0, 0, size.width, size.height);
+    const buckets = new Map();
+    decodes.forEach((item) => {
+      const t = parseTime(item.created_at);
+      if (t == null) return;
+      const d = new Date(t);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      buckets.set(key, (buckets.get(key) || 0) + 1);
+    });
+    const keys = [...buckets.keys()].sort();
+    const max = Math.max(1, ...buckets.values());
+    const cell = Math.max(8, Math.min(18, (size.width - 8) / Math.max(keys.length, 1) - 2));
+    keys.forEach((key, i) => {
+      const n = buckets.get(key);
+      const x = 4 + i * (cell + 2);
+      const h = (n / max) * (size.height - 22);
+      heatCtx.fillStyle = `rgba(110,243,255,${0.18 + 0.82 * (n / max)})`;
+      heatCtx.fillRect(x, size.height - 14 - h, cell, h);
+    });
+    heatCtx.fillStyle = WHITE;
+    heatCtx.font = "10px ui-monospace, monospace";
+    if (keys.length) {
+      heatCtx.fillText(keys[0], 4, size.height - 2);
+      heatCtx.fillText(keys[keys.length - 1], size.width - 58, size.height - 2);
+    }
+  }
+
+  function renderLog() {
+    const server = ((state.catalog && state.catalog.ingest && state.catalog.ingest.events) || [])
+      .slice()
+      .reverse()
+      .map((event) => ({
+        at: (event.at || "").slice(11, 19),
+        message: `${event.source} +${event.added} ~${event.updated} =${event.unchanged} skip ${event.skipped}`,
+        kind: event.added ? "ok" : "dim",
+      }));
+    const rows = [...state.logs, ...server].slice(0, 16);
+    els.runLog.innerHTML = rows.map((row) => (
+      `<div class="${row.kind || ""}">${row.at || "--:--:--"}  ${row.message}</div>`
+    )).join("") || `<div class="dim">waiting for ingest</div>`;
   }
 
   function inspect(item) {
     state.selected = item ? item.id : null;
     if (!item) {
-      els.inspector.innerHTML = `<p class="muted">Select a decode from the list or the map. Edges only draw for the active neighborhood so the map stays readable as history grows.</p>`;
-      draw();
+      els.inspector.innerHTML = `<p class="dim">Select a node. Neighborhood edges light; the rest stay in the fog.</p>`;
       return;
     }
-    const image = item.xGraphicURL
-      ? `<img src="${item.xGraphicURL}" alt="${item.label}">`
-      : "";
-    const tags = (item.keyword_labels || []).map((label) => `<span class="tag">${label}</span>`).join("");
     els.inspector.innerHTML = `
-      ${image}
-      <h2>${item.label}</h2>
+      ${item.xGraphicURL ? `<img src="${item.xGraphicURL}" alt="${item.label}">` : ""}
+      <h3>${item.label}</h3>
       <div class="kv">
-        <span class="muted">Status</span><span>${item.status}</span>
-        <span class="muted">Date</span><span>${(item.created_at || "").slice(0, 10) || "unknown"}</span>
-        <span class="muted">Score</span><span>${item.score}</span>
-        <span class="muted">Source</span><span>${item.source}</span>
-        <span class="muted">Tweet</span><span>${item.tweet_id || "—"}</span>
+        <span class="dim">STATUS</span><span>${item.status}</span>
+        <span class="dim">DATE</span><span>${(item.created_at || "").slice(0, 10) || "unknown"}</span>
+        <span class="dim">SCORE</span><span>${item.score}</span>
+        <span class="dim">ID</span><span>${item.tweet_id || "—"}</span>
       </div>
-      <div>${tags}</div>
+      <div>${(item.keyword_labels || []).map((label) => `<span class="tag">${label}</span>`).join("")}</div>
       <p>
-        ${item.xPostURL ? `<a href="${item.xPostURL}" target="_blank" rel="noreferrer">Open X post</a>` : ""}
-        ${item.xGraphicURL ? ` · <a href="${item.xGraphicURL}" target="_blank" rel="noreferrer">Image</a>` : ""}
+        ${item.xPostURL ? `<a href="${item.xPostURL}" target="_blank" rel="noreferrer">OPEN X</a>` : ""}
       </p>
-      <p class="muted">${(item.edge_labels || []).slice(0, 6).join(" · ")}</p>
     `;
-    draw();
   }
 
   function showHover(item, event) {
     state.hover = item;
     if (!item) {
-      els.hover.classList.add("hidden");
-      draw();
+      els.floatLabel.classList.add("hidden");
       return;
     }
-    els.hover.innerHTML = `
-      ${item.xGraphicURL ? `<img src="${item.xGraphicURL}" alt="">` : ""}
-      <strong>${item.label}</strong>
-      <div class="muted">${(item.created_at || "").slice(0, 10)} · ${item.status}</div>
-    `;
+    els.floatLabel.innerHTML = `<strong>${item.label}</strong>${(item.created_at || "").slice(0, 10)} · ${item.status}`;
     const wrap = els.stage.getBoundingClientRect();
-    els.hover.style.left = `${Math.min(event.clientX - wrap.left + 12, wrap.width - 240)}px`;
-    els.hover.style.top = `${Math.max(8, event.clientY - wrap.top - 20)}px`;
-    els.hover.classList.remove("hidden");
-    draw();
-  }
-
-  function fitCamera() {
-    state.fitToken = "";
-    state.camera = { x: 820, y: 0, scale: state.view === "timeline" ? 0.68 : 0.85 };
-  }
-
-  function maybeFit(decodes, positions) {
-    const token = `${state.view}|${state.query}|${[...state.keywords].join(",")}|${state.range && state.range.join("-")}`;
-    if (token === state.fitToken) return;
-    state.fitToken = token;
-    if (!decodes.length) {
-      fitCamera();
-      state.fitToken = token;
-      return;
-    }
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    const ids = new Set(decodes.map((item) => item.id));
-    decodes.forEach((item) => (item.keyword_ids || []).forEach((id) => ids.add(id)));
-    for (const id of ids) {
-      const pos = positions.get(id);
-      if (!pos) continue;
-      minX = Math.min(minX, pos.x);
-      maxX = Math.max(maxX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxY = Math.max(maxY, pos.y);
-    }
-    if (!Number.isFinite(minX)) return;
-    state.camera.x = (minX + maxX) / 2;
-    state.camera.y = (minY + maxY) / 2;
-    const size = els.stage.getBoundingClientRect();
-    const pad = 160;
-    const scaleX = (size.width - pad) / Math.max(maxX - minX, 240);
-    const scaleY = (size.height - pad) / Math.max(maxY - minY, 240);
-    state.camera.scale = Math.max(0.35, Math.min(1.6, Math.min(scaleX, scaleY)));
+    els.floatLabel.style.left = `${Math.min(event.clientX - wrap.left + 14, wrap.width - 220)}px`;
+    els.floatLabel.style.top = `${Math.max(8, event.clientY - wrap.top - 10)}px`;
+    els.floatLabel.classList.remove("hidden");
   }
 
   async function loadCatalog() {
     const response = await fetch("/api/catalog");
     if (!response.ok) throw new Error("Could not load catalog");
     state.catalog = await response.json();
-    renderChips();
-    fitCamera();
+    log(`catalog loaded · ${state.catalog.counts.confirmed} confirmed`, "ok");
     inspect(null);
+    renderLog();
     draw();
   }
 
   async function syncX() {
-    toast("Syncing X timeline…");
+    toast("SYNCING X TIMELINE");
     const response = await fetch("/api/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -448,25 +474,21 @@
     });
     const payload = await response.json();
     toast(payload.message || payload.error || "Sync finished");
+    log(payload.message || payload.error || "sync", payload.changed ? "ok" : "warn");
     if (response.ok) await loadCatalog();
   }
 
   async function importArchive(file) {
-    toast("Importing archive…");
+    toast("IMPORTING ARCHIVE");
     const body = new FormData();
     body.append("archive", file);
     const response = await fetch("/api/ingest/archive", { method: "POST", body });
     const payload = await response.json();
     toast(payload.message || payload.error || "Import finished");
+    log(payload.message || payload.error || "import", payload.changed ? "ok" : "warn");
     if (response.ok) await loadCatalog();
   }
 
-  els.results.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-id]");
-    if (!button) return;
-    const item = (state.catalog.decodes || []).find((decode) => decode.id === button.dataset.id);
-    inspect(item || null);
-  });
   els.search.addEventListener("input", (event) => {
     state.query = event.target.value;
     draw();
@@ -475,22 +497,16 @@
     state.view = "timeline";
     event.currentTarget.classList.add("active");
     document.getElementById("view-constellation").classList.remove("active");
-    fitCamera();
     draw();
   });
   document.getElementById("view-constellation").addEventListener("click", (event) => {
     state.view = "constellation";
     event.currentTarget.classList.add("active");
     document.getElementById("view-timeline").classList.remove("active");
-    state.fitToken = "";
     draw();
   });
   document.getElementById("btn-sync").addEventListener("click", () => {
     syncX().catch((err) => toast(err.message));
-  });
-  document.getElementById("reset-range").addEventListener("click", () => {
-    state.range = null;
-    draw();
   });
   els.archive.addEventListener("change", (event) => {
     const file = event.target.files && event.target.files[0];
@@ -500,7 +516,7 @@
 
   els.stage.addEventListener("pointerdown", (event) => {
     state.dragging = true;
-    state.lastPtr = { x: event.clientX, y: event.clientY, originX: event.clientX, originY: event.clientY, moved: false };
+    state.lastPtr = { x: event.clientX, y: event.clientY, originX: event.clientX, originY: event.clientY };
   });
   els.stage.addEventListener("pointerup", (event) => {
     if (!state.lastPtr) return;
@@ -513,20 +529,16 @@
     state.dragging = false;
     state.lastPtr = null;
   });
-  window.addEventListener("pointerup", () => {
-    state.dragging = false;
-    state.brush = null;
-  });
+  window.addEventListener("pointerup", () => { state.dragging = false; });
   window.addEventListener("pointermove", (event) => {
     if (state.dragging && state.lastPtr) {
       const dx = event.clientX - state.lastPtr.x;
       const dy = event.clientY - state.lastPtr.y;
-      const fromOrigin = Math.hypot(event.clientX - state.lastPtr.originX, event.clientY - state.lastPtr.originY);
-      if (fromOrigin > 8) state.lastPtr.moved = true;
-      if (state.lastPtr.moved) {
-        state.camera.x -= dx / state.camera.scale;
-        state.camera.y -= dy / state.camera.scale;
-        draw();
+      if (state.view === "constellation") {
+        state.yaw += dx * 0.005;
+        state.pitch = Math.max(-1.1, Math.min(1.1, state.pitch + dy * 0.004));
+      } else {
+        state.yaw += dx * 0.002;
       }
       state.lastPtr.x = event.clientX;
       state.lastPtr.y = event.clientY;
@@ -542,45 +554,21 @@
   });
   els.stage.addEventListener("wheel", (event) => {
     event.preventDefault();
-    const rect = els.stage.getBoundingClientRect();
-    const before = screenToWorld(event.clientX - rect.left, event.clientY - rect.top, state._size);
-    const next = Math.min(4, Math.max(0.25, state.camera.scale * (event.deltaY < 0 ? 1.12 : 0.9)));
-    state.camera.scale = next;
-    const after = screenToWorld(event.clientX - rect.left, event.clientY - rect.top, state._size);
-    state.camera.x += before.x - after.x;
-    state.camera.y += before.y - after.y;
-    draw();
+    state.distance = Math.max(420, Math.min(1800, state.distance + event.deltaY * 0.8));
   }, { passive: false });
-
-  function monthIndexAt(x, width, months) {
-    const gap = 2;
-    const barW = Math.max(3, (width - months.length * gap) / months.length);
-    return Math.min(months.length - 1, Math.max(0, Math.floor(x / (barW + gap))));
-  }
-
-  els.histogram.addEventListener("pointerdown", (event) => {
-    const rect = els.histogram.getBoundingClientRect();
-    const months = state._months || [];
-    if (!months.length) return;
-    const i = monthIndexAt(event.clientX - rect.left, rect.width, months);
-    const month = months[i];
-    state.brush = { start: i, current: i };
-    state.range = [month.start, month.end];
-    draw();
-  });
-  els.histogram.addEventListener("pointermove", (event) => {
-    if (!state.brush) return;
-    const rect = els.histogram.getBoundingClientRect();
-    const months = state._months || [];
-    const i = monthIndexAt(event.clientX - rect.left, rect.width, months);
-    const a = months[Math.min(state.brush.start, i)];
-    const b = months[Math.max(state.brush.start, i)];
-    state.range = [a.start, b.end];
-    draw();
-  });
   window.addEventListener("resize", draw);
 
-  loadCatalog().catch((err) => {
+  function tick() {
+    if (!state.dragging && state.view === "constellation") {
+      state.yaw += 0.0018;
+    }
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  loadCatalog().then(() => {
+    requestAnimationFrame(tick);
+  }).catch((err) => {
     els.empty.classList.remove("hidden");
     els.empty.textContent = err.message;
   });
