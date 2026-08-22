@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>40,000 FT — Decode Explorer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='explorer/app.css') }}">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-kicker">40,000 FT</span>
+        <h1>Decode Explorer</h1>
+      </div>
+      <label class="search">
+        <span class="sr-only">Search decodes</span>
+        <input id="search" type="search" placeholder="Search labels, keywords, tweet IDs…" autocomplete="off">
+      </label>
+      <div class="view-toggle" role="group" aria-label="Layout">
+        <button id="view-timeline" class="active" type="button">Timeline</button>
+        <button id="view-constellation" type="button">Constellation</button>
+      </div>
+      <div class="actions">
+        <button id="btn-sync" type="button" title="Pull new posts from the X API">Sync X</button>
+        <label class="file-btn" title="Import an official X archive for full history">
+          Import archive
+          <input id="archive-file" type="file" accept=".zip,.js">
+        </label>
+        <a class="ghost" href="/classic">Classic graph</a>
+      </div>
+    </header>
+
+    <section class="filters" aria-label="Keyword filters">
+      <div id="stats" class="stats"></div>
+      <div id="keyword-chips" class="chips"></div>
+    </section>
+
+    <main class="stage">
+      <div class="canvas-wrap">
+        <canvas id="stage"></canvas>
+        <div id="hover-card" class="hover-card hidden"></div>
+        <div id="empty-state" class="empty hidden"></div>
+      </div>
+      <aside id="inspector" class="inspector">
+        <p class="muted">Select a decode to inspect it. Hover a node to preview. Edges only draw for the active neighborhood so the map stays readable as history grows.</p>
+      </aside>
+    </main>
+
+    <footer class="timeline-rail">
+      <div class="rail-meta">
+        <span id="range-label"></span>
+        <button id="reset-range" type="button">Reset range</button>
+      </div>
+      <canvas id="histogram" height="72"></canvas>
+    </footer>
+  </div>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="{{ url_for('static', filename='explorer/app.js') }}"></script>
+</body>
+</html>

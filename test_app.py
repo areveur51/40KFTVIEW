@@ -155,6 +155,12 @@ def test_flask_app():
             response = client.get('/')
             tests_passed &= print_test("Index route responds", response.status_code == 200)
             tests_passed &= print_test("Index returns HTML", b'html' in response.data.lower())
+            tests_passed &= print_test("Explorer is home page", b'Decode Explorer' in response.data)
+
+            catalog = client.get('/api/catalog')
+            tests_passed &= print_test("Catalog API responds", catalog.status_code == 200)
+            payload = catalog.get_json() or {}
+            tests_passed &= print_test("Catalog includes decodes", bool(payload.get('decodes')))
             
     except Exception as e:
         tests_passed &= print_test("Flask app test", False, str(e))

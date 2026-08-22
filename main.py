@@ -12,14 +12,17 @@ Version: 3.0 - Refactored with DRY principles
 import json
 import math
 import os
-from datetime import datetime
-from functools import lru_cache
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
-import networkx as nx
 import gravis as gv
-from flask import Flask, send_from_directory, Response
+from flask import Flask, Response, jsonify, make_response, render_template, request, send_from_directory
+
+from ingest import api as x_api
+from ingest.archive import load_archive_posts
+from ingest.catalog import build_catalog, load_state, merge_inbox, save_state
 
 # Configure logging
 logging.basicConfig(
@@ -29,6 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 512 * 1024 * 1024
 
 # Cache control to prevent browser caching issues
 _graph_generated = False
@@ -392,19 +396,16 @@ def generate_map_v2():
     return output_path
 
 
-@app.route('/')
-def index() -> Response:
-    """
-    Serve the main index page with the network graph visualization.
-    
-    Returns:
-        Response: Flask response with index.html and cache control headers
-    """
+def _no_store(response) -> Response:
+    response = make_response(response)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+
+def _ensure_classic_graph() -> None:
     global _graph_generated, _generation_time
-    
-    logger.info('Index page requested')
-    
-    # Check if we need to generate the graph
     template_path = 'templates/index.html'
     if not _graph_generated or not os.path.exists(template_path):
         logger.info('Generating new graph visualization...')
@@ -412,14 +413,136 @@ def index() -> Response:
         _graph_generated = True
         _generation_time = datetime.now()
         logger.info(f'Graph generated successfully at {_generation_time}')
-    else:
-        logger.info(f'Serving cached graph (generated at {_generation_time})')
-    
-    response = send_from_directory('templates', 'index.html')
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+
+
+def _stamp_sync_state(source, records):
+    state = load_state()
+    tweet_ids = [item.get("tweet_id") for item in records if item.get("tweet_id")]
+    newest = max(tweet_ids, key=lambda value: int(value)) if tweet_ids else state.get("newest_tweet_id")
+    state.update({
+        "last_sync_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "last_source": source,
+        "newest_tweet_id": newest or "",
+        "api_available": x_api.api_available(),
+    })
+    save_state(state)
+    return state
+
+
+@app.route('/')
+def index() -> Response:
+    """Serve the searchable timeline/constellation decode explorer."""
+    logger.info('Explorer page requested')
+    return _no_store(render_template('explorer.html'))
+
+
+@app.route('/classic')
+def classic() -> Response:
+    """Serve the original Gravis force-directed graph."""
+    logger.info('Classic graph page requested')
+    _ensure_classic_graph()
+    return _no_store(send_from_directory('templates', 'index.html'))
+
+
+@app.route('/api/catalog')
+def api_catalog():
+    """Return confirmed decodes plus inbox candidates as JSON."""
+    catalog = build_catalog()
+    return _no_store(jsonify(catalog))
+
+
+@app.route('/api/sync', methods=['POST'])
+def api_sync():
+    """Pull new posts from the X API and merge detected decodes into the inbox."""
+    if not x_api.api_available():
+        return jsonify({
+            "ok": False,
+            "error": "missing_token",
+            "message": (
+                "X_BEARER_TOKEN is not set. For complete history from account "
+                "creation, import your official X archive. The user-timeline API "
+                "only covers recent posts (about 3,200) and full-archive search "
+                "needs paid X API access."
+            ),
+        }), 400
+
+    payload = request.get_json(silent=True) or {}
+    username = payload.get("username") or "areveur51"
+    state = load_state()
+    try:
+        if payload.get("full"):
+            records = x_api.fetch_full_archive(
+                username=username,
+                start_time=payload.get("start_time"),
+            )
+            source = "api_full_archive"
+        else:
+            since_id = None if payload.get("backfill") else state.get("newest_tweet_id")
+            records = x_api.fetch_user_timeline(
+                username=username,
+                since_id=since_id or None,
+                start_time=payload.get("start_time"),
+            )
+            source = "api_timeline"
+    except x_api.XApiError as exc:
+        logger.exception("X API sync failed")
+        return jsonify({"ok": False, "error": "api_error", "message": str(exc)}), 502
+
+    decodes = [item for item in records if item.get("is_decode")]
+    stats = merge_inbox(decodes)
+    _stamp_sync_state(source, records)
+    return jsonify({
+        "ok": True,
+        "source": source,
+        "fetched": len(records),
+        "decodes": len(decodes),
+        **stats,
+        "message": (
+            f"Synced {len(records)} posts, detected {len(decodes)} decodes, "
+            f"added {stats['added']} new inbox items."
+        ),
+    })
+
+
+@app.route('/api/ingest/archive', methods=['POST'])
+def api_ingest_archive():
+    """Import an official X archive zip or tweets.js file."""
+    uploaded = request.files.get("archive")
+    if uploaded is None or not uploaded.filename:
+        return jsonify({
+            "ok": False,
+            "error": "missing_file",
+            "message": "Choose an official X archive .zip or a tweets.js file.",
+        }), 400
+
+    suffix = Path(uploaded.filename).suffix or ".zip"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        uploaded.save(tmp.name)
+        temp_path = tmp.name
+    try:
+        posts = load_archive_posts(temp_path)
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+        return jsonify({"ok": False, "error": "bad_archive", "message": str(exc)}), 400
+    finally:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+
+    decodes = [item for item in posts if item.get("is_decode")]
+    stats = merge_inbox(decodes)
+    _stamp_sync_state("archive", posts)
+    return jsonify({
+        "ok": True,
+        "source": "archive",
+        "fetched": len(posts),
+        "decodes": len(decodes),
+        **stats,
+        "message": (
+            f"Archive scanned {len(posts)} posts, detected {len(decodes)} decodes, "
+            f"added {stats['added']} new inbox items."
+        ),
+    })
 
 
 if __name__ == '__main__':
