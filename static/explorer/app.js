@@ -598,7 +598,7 @@
     if (dist < 8) {
       const rect = els.stage.getBoundingClientRect();
       const hit = hitTest(event.clientX - rect.left, event.clientY - rect.top, state._visible || [], state._positions || new Map(), state._size || { width: 0, height: 0 });
-      inspect(hit);
+      if (hit) inspect(hit);
     }
     state.dragging = false;
     state.lastPtr = null;

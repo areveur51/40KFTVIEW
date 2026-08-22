@@ -104,7 +104,7 @@ button, .file-btn { cursor: pointer; }
 }
 
 .post-list {
-  max-height: 132px;
+  max-height: 168px;
   overflow: auto;
   border-bottom: 1px solid var(--line);
 }
