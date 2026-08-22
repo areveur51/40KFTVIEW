@@ -143,6 +143,11 @@ class ExplorerRouteTests(unittest.TestCase):
         self.assertIn("id=\"stage\"", body)
         self.assertIn("id=\"post-view\"", body)
         self.assertIn("id=\"post-list\"", body)
+        self.assertIn("id=\"insight-overlay\"", body)
+        self.assertIn("id=\"kw-legend\"", body)
+        self.assertIn("id=\"signal-gauges\"", body)
+        self.assertIn("id=\"post-insights\"", body)
+        self.assertIn("id=\"hub-list\"", body)
         self.assertIn("X POST", body)
 
     def test_catalog_api(self):

@@ -33,9 +33,26 @@
       </div>
     </header>
 
+    <div id="filter-strip" class="filter-strip" aria-label="Active insight filters"></div>
+
     <div class="workspace">
       <main class="viewport">
         <canvas id="stage"></canvas>
+        <aside id="insight-overlay" class="insight-overlay" aria-label="Decode insights">
+          <section>
+            <h2>PANEL 00 · THEMES</h2>
+            <p class="hint">Click a theme to isolate its decodes. Multi-select is OR.</p>
+            <div id="kw-legend" class="kw-legend"></div>
+          </section>
+          <section>
+            <h2>PANEL 01 · SIGNAL</h2>
+            <div id="kpi-grid" class="kpi-grid"></div>
+          </section>
+          <section>
+            <h2>PANEL 02 · SELECTED</h2>
+            <div id="signal-gauges" class="gauges"></div>
+          </section>
+        </aside>
         <div id="float-label" class="float-label hidden"></div>
         <div id="empty-state" class="empty hidden"></div>
       </main>
@@ -45,24 +62,32 @@
         <div id="post-view" class="post-view">
           <p class="dim">Select a decode to open the full X post and media here.</p>
         </div>
+        <section class="post-insights" aria-label="Related decodes">
+          <h2>RELATED / PATH</h2>
+          <div id="post-insights"></div>
+        </section>
       </aside>
     </div>
 
     <footer class="hud-bottom">
       <section class="panel">
-        <h2>RUN LOG</h2>
-        <div id="run-log" class="log"></div>
+        <h2>PANEL 03 · HUBS</h2>
+        <p class="hint">Most-linked decodes in the current filter</p>
+        <div id="hub-list" class="hub-list"></div>
       </section>
       <section class="panel">
-        <h2>THEME LOAD</h2>
+        <h2>PANEL 04 · THEME LOAD</h2>
+        <p class="hint">Click a bar to isolate that theme</p>
         <canvas id="theme-bars" height="110"></canvas>
       </section>
       <section class="panel">
-        <h2>BLAST RADIUS</h2>
+        <h2>PANEL 05 · BLAST RADIUS</h2>
+        <p class="hint">Click a spoke to isolate that theme</p>
         <canvas id="radar" height="110"></canvas>
       </section>
       <section class="panel">
-        <h2>ACTION HEAT</h2>
+        <h2>PANEL 06 · ACTION HEAT</h2>
+        <p class="hint">Click a month to isolate that window</p>
         <canvas id="heat" height="110"></canvas>
       </section>
     </footer>

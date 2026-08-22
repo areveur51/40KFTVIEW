@@ -11,6 +11,10 @@
     dragging: false,
     lastPtr: null,
     logs: [],
+    keywords: new Set(),
+    year: "",
+    month: "",
+    unlinkedOnly: false,
   };
 
   const els = {
@@ -19,11 +23,16 @@
     stage: document.getElementById("stage"),
     postList: document.getElementById("post-list"),
     postView: document.getElementById("post-view"),
+    postInsights: document.getElementById("post-insights"),
+    filterStrip: document.getElementById("filter-strip"),
+    kwLegend: document.getElementById("kw-legend"),
+    kpiGrid: document.getElementById("kpi-grid"),
+    gauges: document.getElementById("signal-gauges"),
+    hubs: document.getElementById("hub-list"),
     floatLabel: document.getElementById("float-label"),
     empty: document.getElementById("empty-state"),
     toast: document.getElementById("toast"),
     archive: document.getElementById("archive-file"),
-    runLog: document.getElementById("run-log"),
     theme: document.getElementById("theme-bars"),
     radar: document.getElementById("radar"),
     heat: document.getElementById("heat"),
@@ -58,12 +67,34 @@
     return Number.isNaN(ms) ? null : ms;
   }
 
+  function filterSignature() {
+    return [
+      state.query,
+      state.year,
+      state.month,
+      state.unlinkedOnly ? "1" : "0",
+      [...state.keywords].sort().join(","),
+    ].join("|");
+  }
+
+  function monthKey(value) {
+    const t = parseTime(value);
+    if (t == null) return "";
+    const d = new Date(t);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+
   function visibleDecodes() {
     if (!state.catalog) return [];
     const q = state.query.trim().toLowerCase();
     return state.catalog.decodes.filter((item) => {
-      if (!q) return true;
-      return (item.search_text || "").includes(q) || (item.tweet_id || "").includes(q);
+      if (q && !(item.search_text || "").includes(q) && !(item.tweet_id || "").includes(q)) return false;
+      if (state.year && !(item.created_at || "").startsWith(state.year)) return false;
+      if (state.month && monthKey(item.created_at) !== state.month) return false;
+      const kws = item.keyword_ids || [];
+      if (state.unlinkedOnly && kws.length) return false;
+      if (state.keywords.size && ![...state.keywords].some((id) => kws.includes(id))) return false;
+      return true;
     });
   }
 
@@ -311,30 +342,41 @@
   function updateHud(decodes) {
     const counts = state.catalog.counts;
     els.metrics.textContent = `DECODES ${counts.confirmed}   CANDIDATES ${counts.candidates}   SHOWING ${decodes.length}   EDGES ${counts.edges}`;
+    const sig = `${filterSignature()}\0${decodes.map((item) => item.id).join(",")}\0${state.selected || ""}`;
+    if (sig === state._hudSig) return;
+    state._hudSig = sig;
     drawTheme(decodes);
     drawRadar(decodes);
     drawHeat(decodes);
     syncPostList(decodes);
+    renderLegend(decodes);
+    renderKpis(decodes);
+    renderHubs(decodes);
+    renderFilterStrip();
   }
 
   function drawTheme(decodes) {
     const size = resize(els.theme, themeCtx);
     themeCtx.clearRect(0, 0, size.width, size.height);
     const counts = state.catalog.keywords.map((kw) => ({
+      id: kw.id,
       label: kw.label,
       n: decodes.filter((item) => (item.keyword_ids || []).includes(kw.id)).length,
     })).sort((a, b) => b.n - a.n).slice(0, 6);
     const max = Math.max(1, ...counts.map((item) => item.n));
+    state._themeHits = [];
     counts.forEach((item, i) => {
       const y = 6 + i * 16;
       const w = (item.n / max) * (size.width - 88);
-      themeCtx.fillStyle = MAGENTA;
+      const active = state.keywords.has(item.id);
+      themeCtx.fillStyle = active ? CYAN : MAGENTA;
       themeCtx.fillRect(80, y, Math.max(2, w), 8);
-      themeCtx.fillStyle = WHITE;
+      themeCtx.fillStyle = active ? CYAN : WHITE;
       themeCtx.font = "10px ui-monospace, monospace";
       themeCtx.fillText(item.label.slice(0, 10), 0, y + 8);
       themeCtx.fillStyle = CYAN;
       themeCtx.fillText(String(item.n), size.width - 18, y + 8);
+      state._themeHits.push({ id: item.id, y0: y, y1: y + 12 });
     });
   }
 
@@ -373,6 +415,7 @@
     radarCtx.closePath();
     radarCtx.fill();
     radarCtx.stroke();
+    state._radarHits = { cx, cy, r, axes };
   }
 
   function drawHeat(decodes) {
@@ -389,12 +432,15 @@
     const keys = [...buckets.keys()].sort();
     const max = Math.max(1, ...buckets.values());
     const cell = Math.max(8, Math.min(18, (size.width - 8) / Math.max(keys.length, 1) - 2));
+    state._heatHits = [];
     keys.forEach((key, i) => {
       const n = buckets.get(key);
       const x = 4 + i * (cell + 2);
       const h = (n / max) * (size.height - 22);
-      heatCtx.fillStyle = `rgba(110,243,255,${0.18 + 0.82 * (n / max)})`;
+      const active = state.month === key;
+      heatCtx.fillStyle = active ? AMBER : `rgba(110,243,255,${0.18 + 0.82 * (n / max)})`;
       heatCtx.fillRect(x, size.height - 14 - h, cell, h);
+      state._heatHits.push({ key, x0: x, x1: x + cell });
     });
     heatCtx.fillStyle = WHITE;
     heatCtx.font = "10px ui-monospace, monospace";
@@ -414,9 +460,7 @@
         kind: event.added ? "ok" : "dim",
       }));
     const rows = [...state.logs, ...server].slice(0, 16);
-    els.runLog.innerHTML = rows.map((row) => (
-      `<div class="${row.kind || ""}">${row.at || "--:--:--"}  ${row.message}</div>`
-    )).join("") || `<div class="dim">waiting for ingest</div>`;
+    state._logRows = rows;
   }
 
   function esc(value) {
@@ -471,12 +515,200 @@
     }
   }
 
+  function toggleKeyword(id) {
+    if (!id) return;
+    if (state.keywords.has(id)) state.keywords.delete(id);
+    else state.keywords.add(id);
+    state.unlinkedOnly = false;
+    state._hudSig = "";
+    draw();
+  }
+
+  function setYear(year) {
+    state.year = state.year === year ? "" : year;
+    if (state.year && state.month && !state.month.startsWith(state.year)) state.month = "";
+    state._hudSig = "";
+    draw();
+  }
+
+  function setMonth(month) {
+    state.month = state.month === month ? "" : month;
+    if (state.month) state.year = state.month.slice(0, 4);
+    state._hudSig = "";
+    draw();
+  }
+
+  function setUnlinkedOnly() {
+    state.unlinkedOnly = !state.unlinkedOnly;
+    if (state.unlinkedOnly) state.keywords.clear();
+    state._hudSig = "";
+    draw();
+  }
+
+  function clearFilters() {
+    state.keywords.clear();
+    state.year = "";
+    state.month = "";
+    state.unlinkedOnly = false;
+    state.query = "";
+    if (els.search) els.search.value = "";
+    state._hudSig = "";
+    draw();
+  }
+
+  function catalogYears() {
+    const years = new Set();
+    (state.catalog.decodes || []).forEach((item) => {
+      const year = (item.created_at || "").slice(0, 4);
+      if (year) years.add(year);
+    });
+    return [...years].sort();
+  }
+
+  function renderFilterStrip() {
+    const chips = [];
+    catalogYears().forEach((year) => {
+      chips.push(`<button type="button" class="year-chip${state.year === year ? " active" : ""}" data-year="${esc(year)}">${esc(year)}</button>`);
+    });
+    chips.push(`<button type="button" class="filter-chip${state.unlinkedOnly ? " active" : ""}" data-unlinked="1">UNLINKED</button>`);
+    [...state.keywords].forEach((id) => {
+      const kw = (state.catalog.keywords || []).find((item) => item.id === id);
+      chips.push(`<button type="button" class="filter-chip active" data-kw="${esc(id)}">${esc(kw ? kw.label : id)}</button>`);
+    });
+    if (state.month) chips.push(`<button type="button" class="filter-chip active" data-month="${esc(state.month)}">${esc(state.month)}</button>`);
+    if (state.keywords.size || state.year || state.month || state.unlinkedOnly || state.query) {
+      chips.push(`<button type="button" class="filter-chip" data-clear="1">CLEAR</button>`);
+    }
+    els.filterStrip.innerHTML = chips.join("");
+  }
+
+  function renderLegend(decodes) {
+    const rows = state.catalog.keywords.map((kw) => {
+      const n = decodes.filter((item) => (item.keyword_ids || []).includes(kw.id)).length;
+      return { ...kw, n };
+    }).sort((a, b) => b.n - a.n);
+    els.kwLegend.innerHTML = rows.map((kw) => `
+      <button type="button" class="kw-chip${state.keywords.has(kw.id) ? " active" : ""}" data-kw="${esc(kw.id)}">
+        <span><span class="swatch"></span> ${esc(kw.label)}</span>
+        <span class="n">${kw.n}</span>
+      </button>
+    `).join("");
+  }
+
+  function renderKpis(decodes) {
+    const linked = decodes.filter((item) => (item.keyword_ids || []).length).length;
+    const unlinked = decodes.length - linked;
+    const bridges = decodes.filter((item) => (item.keyword_ids || []).length >= 2).length;
+    const dates = decodes.map((item) => (item.created_at || "").slice(0, 10)).filter(Boolean).sort();
+    const span = dates.length ? `${dates[0].slice(2)} → ${dates[dates.length - 1].slice(2)}` : "—";
+    const pct = decodes.length ? Math.round((linked / decodes.length) * 100) : 0;
+    els.kpiGrid.innerHTML = `
+      <button type="button" class="kpi" data-kpi="all"><span>SHOWING</span><strong>${decodes.length}</strong></button>
+      <button type="button" class="kpi" data-kpi="linked"><span>LINKED</span><strong>${pct}%</strong></button>
+      <button type="button" class="kpi${state.unlinkedOnly ? " active" : ""}" data-kpi="unlinked"><span>UNLINKED</span><strong>${unlinked}</strong></button>
+      <button type="button" class="kpi" data-kpi="bridges"><span>BRIDGES</span><strong>${bridges}</strong></button>
+      <button type="button" class="kpi" data-kpi="span"><span>SPAN</span><strong>${esc(span)}</strong></button>
+      <button type="button" class="kpi" data-kpi="hubs"><span>MAX LINKS</span><strong>${Math.max(0, ...decodes.map((item) => (item.connections || []).length))}</strong></button>
+    `;
+  }
+
+  function gaugeSvg(pct, tone) {
+    const p = Math.max(0, Math.min(100, Math.round(pct)));
+    const ring = "M18 2.08 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831";
+    return `<svg viewBox="0 0 36 36" aria-hidden="true">
+      <path class="bg" d="${ring}"></path>
+      <path class="fg ${tone}" pathLength="100" stroke-dasharray="${p} 100" d="${ring}"></path>
+    </svg>`;
+  }
+
+  function renderGauges(item) {
+    if (!item || !state.catalog) {
+      els.gauges.innerHTML = `<p class="hint">Select a decode to score its links, themes, and recency.</p>`;
+      return;
+    }
+    const maxLinks = Math.max(1, ...state.catalog.decodes.map((decode) => (decode.connections || []).length));
+    const maxThemes = Math.max(1, ...state.catalog.decodes.map((decode) => (decode.keyword_ids || []).length));
+    const times = state.catalog.decodes.map((decode) => parseTime(decode.created_at)).filter((v) => v != null);
+    const min = Math.min(...times);
+    const max = Math.max(...times);
+    const t = parseTime(item.created_at);
+    const recency = t == null || max === min ? 50 : ((t - min) / (max - min)) * 100;
+    const linkPct = ((item.connections || []).length / maxLinks) * 100;
+    const themePct = ((item.keyword_ids || []).length / maxThemes) * 100;
+    els.gauges.innerHTML = `
+      <div class="gauge">${gaugeSvg(linkPct, "")}<b>${(item.connections || []).length}</b><span>LINKS</span></div>
+      <div class="gauge">${gaugeSvg(themePct, "magenta")}<b>${(item.keyword_ids || []).length}</b><span>THEMES</span></div>
+      <div class="gauge">${gaugeSvg(recency, "amber")}<b>${recency >= 66 ? "LATE" : recency >= 33 ? "MID" : "EARLY"}</b><span>ERA</span></div>
+    `;
+  }
+
+  function relatedDecodes(item) {
+    if (!item || !state.catalog) return [];
+    const byId = new Map(state.catalog.decodes.map((decode) => [decode.id, decode]));
+    const seen = new Set([item.id]);
+    const rows = [];
+    (item.connections || []).forEach((id) => {
+      const other = byId.get(id);
+      if (!other || seen.has(id)) return;
+      seen.add(id);
+      rows.push({ item: other, why: "edge" });
+    });
+    const mine = new Set(item.keyword_ids || []);
+    if (mine.size) {
+      state.catalog.decodes.forEach((other) => {
+        if (seen.has(other.id)) return;
+        const overlap = (other.keyword_ids || []).filter((id) => mine.has(id));
+        if (!overlap.length) return;
+        seen.add(other.id);
+        rows.push({ item: other, why: overlap[0] });
+      });
+    }
+    return rows.slice(0, 8);
+  }
+
+  function renderRelated(item) {
+    if (!item) {
+      els.postInsights.innerHTML = `<p class="hint">Select a decode to see linked posts and shared themes.</p>`;
+      return;
+    }
+    const labels = (item.keyword_ids || []).map((id, i) => (
+      `<button type="button" class="tag${state.keywords.has(id) ? " active" : ""}" data-kw="${esc(id)}">${esc((item.keyword_labels || [])[i] || id)}</button>`
+    )).join("");
+    const edges = (item.edge_labels || []).slice(0, 4).map((label) => `<span class="tag">${esc(label)}</span>`).join("");
+    const related = relatedDecodes(item);
+    const rows = related.map((entry) => `
+      <button type="button" class="related-item" data-id="${esc(entry.item.id)}">
+        <span>${esc(entry.item.label)}</span>
+        <span class="dim">${esc(entry.why === "edge" ? "LINK" : "THEME")}</span>
+      </button>
+    `).join("");
+    els.postInsights.innerHTML = `
+      <div class="path-chips">${labels || `<span class="dim">No theme links</span>`}${edges}</div>
+      ${rows || `<p class="hint">No neighboring decodes in the catalog.</p>`}
+    `;
+  }
+
+  function renderHubs(decodes) {
+    const hubs = decodes
+      .slice()
+      .sort((a, b) => (b.connections || []).length - (a.connections || []).length || (b.keyword_ids || []).length - (a.keyword_ids || []).length)
+      .slice(0, 8);
+    els.hubs.innerHTML = hubs.map((item) => `
+      <button type="button" class="hub-item${item.id === state.selected ? " active" : ""}" data-id="${esc(item.id)}">
+        <span>${esc(item.label)}</span>
+        <span class="dim">${(item.connections || []).length} ln · ${(item.keyword_ids || []).length} th</span>
+      </button>
+    `).join("") || `<div class="dim">No hubs in this filter</div>`;
+  }
+
   function inspect(item) {
     const next = item ? item.id : null;
     const changed = next !== state.selected;
     state.selected = next;
     markListSelection();
     if (changed) scrollSelectedIntoView();
+    renderGauges(item);
+    renderRelated(item);
     if (!item) {
       els.postView.innerHTML = `<p class="dim">Select a decode to open the full X post and media here.</p>`;
       return;
@@ -503,7 +735,7 @@
         <span class="dim">SCORE</span><span>${esc(item.score)}</span>
         <span class="dim">ID</span><span>${esc(item.tweet_id || "—")}</span>
       </div>
-      <div>${(item.keyword_labels || []).map((label) => `<span class="tag">${esc(label)}</span>`).join("")}</div>
+      <div>${(item.keyword_ids || []).map((id, i) => `<button type="button" class="tag${state.keywords.has(id) ? " active" : ""}" data-kw="${esc(id)}">${esc((item.keyword_labels || [])[i] || id)}</button>`).join("")}</div>
       <div class="post-actions">
         ${item.xPostURL ? `<a href="${esc(item.xPostURL)}" target="_blank" rel="noreferrer">OPEN ON X</a>` : ""}
         ${item.xGraphicURL ? `<a href="${esc(mediaUrl(item.xGraphicURL))}" target="_blank" rel="noreferrer">OPEN MEDIA</a>` : ""}
@@ -561,15 +793,74 @@
     if (response.ok) await loadCatalog();
   }
 
-  els.postList.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-id]");
-    if (!button) return;
-    const item = (state.catalog.decodes || []).find((decode) => decode.id === button.dataset.id);
-    inspect(item || null);
-  });
+  function findDecode(id) {
+    return (state.catalog && state.catalog.decodes || []).find((decode) => decode.id === id) || null;
+  }
+
+  function canvasLocal(canvas, event) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  function onFilterClick(event) {
+    const clear = event.target.closest("[data-clear]");
+    if (clear) return clearFilters();
+    const unlinked = event.target.closest("[data-unlinked]");
+    if (unlinked) return setUnlinkedOnly();
+    const year = event.target.closest("[data-year]");
+    if (year) return setYear(year.dataset.year);
+    const month = event.target.closest("[data-month]");
+    if (month) return setMonth(month.dataset.month);
+    const kw = event.target.closest("[data-kw]");
+    if (kw) return toggleKeyword(kw.dataset.kw);
+    const id = event.target.closest("[data-id]");
+    if (id) return inspect(findDecode(id.dataset.id));
+    const kpi = event.target.closest("[data-kpi]");
+    if (kpi && kpi.dataset.kpi === "unlinked") return setUnlinkedOnly();
+    if (kpi && kpi.dataset.kpi === "all") return clearFilters();
+  }
+
+  els.postList.addEventListener("click", onFilterClick);
+  els.filterStrip.addEventListener("click", onFilterClick);
+  els.kwLegend.addEventListener("click", onFilterClick);
+  els.kpiGrid.addEventListener("click", onFilterClick);
+  els.postInsights.addEventListener("click", onFilterClick);
+  els.postView.addEventListener("click", onFilterClick);
+  els.hubs.addEventListener("click", onFilterClick);
   els.search.addEventListener("input", (event) => {
     state.query = event.target.value;
+    state._hudSig = "";
     draw();
+  });
+  els.theme.addEventListener("click", (event) => {
+    const { y } = canvasLocal(els.theme, event);
+    const hit = (state._themeHits || []).find((row) => y >= row.y0 && y <= row.y1);
+    if (hit) toggleKeyword(hit.id);
+  });
+  els.radar.addEventListener("click", (event) => {
+    const hit = state._radarHits;
+    if (!hit || !hit.axes.length) return;
+    const { x, y } = canvasLocal(els.radar, event);
+    const dx = x - hit.cx;
+    const dy = y - hit.cy;
+    if (Math.hypot(dx, dy) > hit.r + 10) return;
+    const angle = Math.atan2(dy, dx);
+    let best = null;
+    let bestDiff = Math.PI;
+    hit.axes.forEach((kw, i) => {
+      const a = (i / hit.axes.length) * Math.PI * 2 - Math.PI / 2;
+      const diff = Math.abs(Math.atan2(Math.sin(angle - a), Math.cos(angle - a)));
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = kw.id;
+      }
+    });
+    if (best && bestDiff < 0.7) toggleKeyword(best);
+  });
+  els.heat.addEventListener("click", (event) => {
+    const { x } = canvasLocal(els.heat, event);
+    const hit = (state._heatHits || []).find((row) => x >= row.x0 && x <= row.x1);
+    if (hit) setMonth(hit.key);
   });
   document.getElementById("view-timeline").addEventListener("click", (event) => {
     state.view = "timeline";
@@ -634,7 +925,7 @@
     event.preventDefault();
     state.distance = Math.max(420, Math.min(1800, state.distance + event.deltaY * 0.8));
   }, { passive: false });
-  window.addEventListener("resize", draw);
+  window.addEventListener("resize", () => { state._hudSig = ""; draw(); });
 
   function tick() {
     if (!state.dragging && state.view === "constellation") {

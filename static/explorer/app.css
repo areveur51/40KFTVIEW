@@ -22,7 +22,7 @@ html, body {
 .hud {
   height: 100vh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) 168px;
+  grid-template-rows: auto auto minmax(0, 1fr) 196px;
 }
 
 .hud-top {
@@ -85,6 +85,187 @@ button, .file-btn { cursor: pointer; }
 
 .viewport { position: relative; min-height: 0; background: #000; }
 #stage { width: 100%; height: 100%; display: block; }
+
+.filter-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #050508;
+}
+
+.filter-chip,
+.year-chip,
+.kw-chip,
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: #050508;
+  color: var(--text);
+  padding: 3px 8px;
+  font: inherit;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.filter-chip.active,
+.year-chip.active,
+.kw-chip.active,
+.tag.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.kw-chip .swatch {
+  width: 7px;
+  height: 7px;
+  background: var(--magenta);
+}
+.kw-chip .n { color: var(--cyan); }
+
+.insight-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: min(248px, 38%);
+  max-height: calc(100% - 20px);
+  overflow: auto;
+  z-index: 2;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.78);
+}
+
+.insight-overlay section + section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.insight-overlay h2,
+.post-insights h2 {
+  margin: 0 0 4px;
+  color: var(--magenta);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+.hint {
+  margin: 0 0 8px;
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.kw-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.kw-chip { justify-content: space-between; width: 100%; text-align: left; }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.kpi {
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.kpi strong {
+  display: block;
+  color: var(--cyan);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+
+.kpi.active { border-color: var(--amber); color: var(--amber); }
+.kpi.active strong { color: var(--amber); }
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.gauge {
+  text-align: center;
+}
+
+.gauge svg { width: 64px; height: 64px; }
+.gauge .bg { fill: none; stroke: #1c1c24; stroke-width: 3; }
+.gauge .fg { fill: none; stroke: var(--cyan); stroke-width: 3; stroke-linecap: butt; }
+.gauge .fg.magenta { stroke: var(--magenta); }
+.gauge .fg.amber { stroke: var(--amber); }
+.gauge b { display: block; color: var(--text); font-size: 11px; }
+.gauge span { color: var(--dim); font-size: 9px; letter-spacing: 0.1em; }
+
+.post-insights {
+  border-top: 1px solid var(--line);
+  padding: 8px 12px 10px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.related-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 6px 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.related-item:hover { color: var(--cyan); }
+
+.path-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+
+.hub-list {
+  height: 132px;
+  overflow: auto;
+}
+
+.hub-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 4px 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hub-item:hover,
+.hub-item.active { color: var(--cyan); }
+
+#theme-bars,
+#radar,
+#heat { cursor: pointer; width: 100%; }
 
 .post-rail {
   display: flex;
@@ -261,9 +442,10 @@ button, .file-btn { cursor: pointer; }
 }
 
 @media (max-width: 1100px) {
-  .hud { grid-template-rows: auto minmax(0, 1fr) auto; }
+  .hud { grid-template-rows: auto auto minmax(0, 1fr) auto; }
   .hud-top { grid-template-columns: 1fr; }
   .workspace { grid-template-columns: 1fr; }
+  .insight-overlay { width: min(220px, 46%); }
   .post-rail { border-left: 0; border-top: 1px solid var(--line); max-height: 42vh; }
   .hud-bottom { grid-template-columns: 1fr 1fr; }
   .panel { border-bottom: 1px solid var(--line); }
