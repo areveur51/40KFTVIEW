@@ -515,34 +515,40 @@
     }
   }
 
+  function afterFilter() {
+    state._hudSig = "";
+    const decodes = visibleDecodes();
+    if (decodes.length && !decodes.some((item) => item.id === state.selected)) {
+      const newest = decodes.slice().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))[0];
+      inspect(newest);
+    }
+    draw();
+  }
+
   function toggleKeyword(id) {
     if (!id) return;
     if (state.keywords.has(id)) state.keywords.delete(id);
     else state.keywords.add(id);
     state.unlinkedOnly = false;
-    state._hudSig = "";
-    draw();
+    afterFilter();
   }
 
   function setYear(year) {
     state.year = state.year === year ? "" : year;
     if (state.year && state.month && !state.month.startsWith(state.year)) state.month = "";
-    state._hudSig = "";
-    draw();
+    afterFilter();
   }
 
   function setMonth(month) {
     state.month = state.month === month ? "" : month;
     if (state.month) state.year = state.month.slice(0, 4);
-    state._hudSig = "";
-    draw();
+    afterFilter();
   }
 
   function setUnlinkedOnly() {
     state.unlinkedOnly = !state.unlinkedOnly;
     if (state.unlinkedOnly) state.keywords.clear();
-    state._hudSig = "";
-    draw();
+    afterFilter();
   }
 
   function clearFilters() {
@@ -829,8 +835,7 @@
   els.hubs.addEventListener("click", onFilterClick);
   els.search.addEventListener("input", (event) => {
     state.query = event.target.value;
-    state._hudSig = "";
-    draw();
+    afterFilter();
   });
   els.theme.addEventListener("click", (event) => {
     const { y } = canvasLocal(els.theme, event);
