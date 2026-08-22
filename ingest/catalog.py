@@ -289,6 +289,10 @@ def build_catalog():
             "text": label,
             "xPostURL": node.get("xPostURL") or "",
             "xGraphicURL": node.get("xGraphicURL") or "",
+            "media": (
+                [{"url": node.get("xGraphicURL"), "type": "photo"}]
+                if node.get("xGraphicURL") else []
+            ),
             "keywords": linked_keywords,
             "connections": [item["id"] for item in connected if not item["id"].startswith("kw-")],
             "edge_labels": [item["label"] for item in connected if item["label"]],
@@ -341,6 +345,10 @@ def build_catalog():
             "text": record.get("text") or "",
             "xPostURL": record.get("xPostURL") or "",
             "xGraphicURL": record.get("xGraphicURL") or "",
+            "media": record.get("media") or (
+                [{"url": record.get("xGraphicURL"), "type": "photo"}]
+                if record.get("xGraphicURL") else []
+            ),
             "keywords": [{"id": kid, "label": keyword_labels.get(kid, kid)} for kid in matched_ids],
             "keyword_ids": matched_ids,
             "keyword_labels": [keyword_labels.get(kid, kid) for kid in matched_ids],

@@ -82,6 +82,8 @@ class CatalogTests(unittest.TestCase):
         greatest = next(item for item in catalog["decodes"] if item["id"] == "greatestfear")
         self.assertEqual(greatest["status"], "confirmed")
         self.assertTrue(greatest["created_at"].startswith("2024-06"))
+        self.assertTrue(greatest["xGraphicURL"])
+        self.assertTrue(greatest["media"])
         self.assertTrue(any(item["id"] == "kw-PATRIOTS" for item in catalog["keywords"]))
 
     def test_merge_inbox_skips_existing_and_adds_new(self):
@@ -139,6 +141,8 @@ class ExplorerRouteTests(unittest.TestCase):
         body = response.data.decode("utf-8", errors="replace")
         self.assertIn("Decode Explorer", body)
         self.assertIn("id=\"stage\"", body)
+        self.assertIn("id=\"post-view\"", body)
+        self.assertIn("X POST", body)
 
     def test_catalog_api(self):
         response = self.client.get("/api/catalog")

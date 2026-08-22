@@ -33,11 +33,19 @@
       </div>
     </header>
 
-    <main class="viewport">
-      <canvas id="stage"></canvas>
-      <div id="float-label" class="float-label hidden"></div>
-      <div id="empty-state" class="empty hidden"></div>
-    </main>
+    <div class="workspace">
+      <main class="viewport">
+        <canvas id="stage"></canvas>
+        <div id="float-label" class="float-label hidden"></div>
+        <div id="empty-state" class="empty hidden"></div>
+      </main>
+      <aside class="post-rail" aria-label="Selected X post">
+        <h2>X POST</h2>
+        <div id="post-view" class="post-view">
+          <p class="dim">Select a decode to open the full X post and media here.</p>
+        </div>
+      </aside>
+    </div>
 
     <footer class="hud-bottom">
       <section class="panel">
@@ -55,12 +63,6 @@
       <section class="panel">
         <h2>ACTION HEAT</h2>
         <canvas id="heat" height="110"></canvas>
-      </section>
-      <section class="panel inspect-panel">
-        <h2>INSPECT</h2>
-        <div id="inspector" class="inspect">
-          <p class="dim">Select a node. Neighborhood edges light; the rest stay in the fog.</p>
-        </div>
       </section>
     </footer>
   </div>

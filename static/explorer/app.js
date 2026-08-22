@@ -17,7 +17,7 @@
     search: document.getElementById("search"),
     metrics: document.getElementById("metrics"),
     stage: document.getElementById("stage"),
-    inspector: document.getElementById("inspector"),
+    postView: document.getElementById("post-view"),
     floatLabel: document.getElementById("float-label"),
     empty: document.getElementById("empty-state"),
     toast: document.getElementById("toast"),
@@ -420,25 +420,54 @@
     )).join("") || `<div class="dim">waiting for ingest</div>`;
   }
 
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[ch]));
+  }
+
+  function mediaUrl(url) {
+    if (!url) return "";
+    return url.replace(/name=\w+/, "name=large");
+  }
+
   function inspect(item) {
     state.selected = item ? item.id : null;
     if (!item) {
-      els.inspector.innerHTML = `<p class="dim">Select a node. Neighborhood edges light; the rest stay in the fog.</p>`;
+      els.postView.innerHTML = `<p class="dim">Select a decode to open the full X post and media here.</p>`;
       return;
     }
-    els.inspector.innerHTML = `
-      ${item.xGraphicURL ? `<img src="${item.xGraphicURL}" alt="${item.label}">` : ""}
-      <h3>${item.label}</h3>
-      <div class="kv">
-        <span class="dim">STATUS</span><span>${item.status}</span>
-        <span class="dim">DATE</span><span>${(item.created_at || "").slice(0, 10) || "unknown"}</span>
-        <span class="dim">SCORE</span><span>${item.score}</span>
-        <span class="dim">ID</span><span>${item.tweet_id || "—"}</span>
+    const media = (item.media && item.media.length)
+      ? item.media
+      : (item.xGraphicURL ? [{ url: item.xGraphicURL, type: "photo" }] : []);
+    const frames = media.map((entry) => {
+      const url = mediaUrl(entry.url || item.xGraphicURL);
+      if (!url) return "";
+      return `<a href="${esc(url)}" target="_blank" rel="noreferrer"><img src="${esc(url)}" alt="${esc(item.label)}"></a>`;
+    }).join("");
+    const body = item.text && item.text !== item.label ? item.text : item.label;
+    const when = (item.created_at || "").replace("T", " ").slice(0, 16) || "unknown";
+    els.postView.innerHTML = `
+      <div class="post-head">
+        <strong>@${esc((state.catalog && state.catalog.account) || "areveur51")}</strong>
+        <span>${esc(when)}</span>
       </div>
-      <div>${(item.keyword_labels || []).map((label) => `<span class="tag">${label}</span>`).join("")}</div>
-      <p>
-        ${item.xPostURL ? `<a href="${item.xPostURL}" target="_blank" rel="noreferrer">OPEN X</a>` : ""}
-      </p>
+      <div class="post-media">${frames || `<p class="dim">No media on this post.</p>`}</div>
+      <p class="post-text">${esc(body)}</p>
+      <div class="kv">
+        <span class="dim">STATUS</span><span>${esc(item.status)}</span>
+        <span class="dim">SCORE</span><span>${esc(item.score)}</span>
+        <span class="dim">ID</span><span>${esc(item.tweet_id || "—")}</span>
+      </div>
+      <div>${(item.keyword_labels || []).map((label) => `<span class="tag">${esc(label)}</span>`).join("")}</div>
+      <div class="post-actions">
+        ${item.xPostURL ? `<a href="${esc(item.xPostURL)}" target="_blank" rel="noreferrer">OPEN ON X</a>` : ""}
+        ${item.xGraphicURL ? `<a href="${esc(mediaUrl(item.xGraphicURL))}" target="_blank" rel="noreferrer">OPEN MEDIA</a>` : ""}
+      </div>
     `;
   }
 
