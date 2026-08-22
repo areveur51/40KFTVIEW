@@ -79,7 +79,7 @@ button, .file-btn { cursor: pointer; }
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
   min-height: 0;
 }
 
@@ -165,8 +165,6 @@ button, .file-btn { cursor: pointer; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 180px;
-  overflow: auto;
 }
 
 .kw-chip { justify-content: space-between; width: 100%; text-align: left; }
@@ -216,10 +214,9 @@ button, .file-btn { cursor: pointer; }
 .gauge span { color: var(--dim); font-size: 9px; letter-spacing: 0.1em; }
 
 .post-insights {
+  margin-top: 14px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
-  padding: 8px 12px 10px;
-  max-height: 180px;
-  overflow: auto;
 }
 
 .related-item {
@@ -271,49 +268,33 @@ button, .file-btn { cursor: pointer; }
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   border-left: 1px solid var(--line);
   background: #050508;
 }
 
-.post-rail h2 {
-  margin: 0;
+.post-rail-head {
+  flex: 0 0 auto;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
+}
+
+.post-rail h2 {
+  margin: 0 0 6px;
   color: var(--magenta);
   font-size: 10px;
   letter-spacing: 0.16em;
 }
 
-.post-list {
-  max-height: 168px;
-  overflow: auto;
-  border-bottom: 1px solid var(--line);
-}
-
-.post-item {
-  display: grid;
-  grid-template-columns: 8px 1fr auto;
-  gap: 8px;
-  align-items: center;
+.post-nav-wrap { display: block; }
+#post-nav {
   width: 100%;
-  text-align: left;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
+  border: 1px solid var(--line);
+  background: #050508;
   color: var(--text);
-  padding: 7px 12px;
   font: inherit;
-  cursor: pointer;
+  padding: 6px 8px;
 }
-
-.post-item.active { color: var(--cyan); }
-.post-item .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cyan);
-}
-.post-item .dot.candidate { background: var(--amber); }
 
 .post-view {
   flex: 1;
@@ -332,6 +313,22 @@ button, .file-btn { cursor: pointer; }
 
 .post-head strong { color: var(--cyan); }
 
+.post-title {
+  margin: 0 0 8px;
+  color: var(--cyan);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.post-text {
+  margin: 0 0 14px;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .post-media {
   display: flex;
   flex-direction: column;
@@ -343,18 +340,10 @@ button, .file-btn { cursor: pointer; }
 .post-media img {
   width: 100%;
   height: auto;
-  max-height: none;
+  max-height: 280px;
   object-fit: contain;
   border: 1px solid var(--line);
   background: #000;
-}
-
-.post-text {
-  margin: 0 0 12px;
-  color: var(--text);
-  white-space: pre-wrap;
-  font-size: 13px;
-  line-height: 1.5;
 }
 
 .post-actions { display: flex; gap: 10px; margin-top: 12px; }

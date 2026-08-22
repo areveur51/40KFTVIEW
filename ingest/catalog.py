@@ -14,6 +14,7 @@ NODES_FILE = DATA_DIR / "nodes.json"
 EDGES_FILE = DATA_DIR / "edges.json"
 INBOX_FILE = DATA_DIR / "inbox.json"
 STATE_FILE = DATA_DIR / "ingest_state.json"
+POST_TEXTS_FILE = DATA_DIR / "post_texts.json"
 ACCOUNT = "areveur51"
 PROTECTED_STATUSES = frozenset({"confirmed", "rejected"})
 RECORD_FIELDS = (
@@ -83,6 +84,43 @@ def record_fingerprint(record):
 
 def load_inbox():
     return load_json(INBOX_FILE, default=[]) or []
+
+
+def load_post_texts():
+    payload = load_json(POST_TEXTS_FILE, default={}) or {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def fold_styled_text(value):
+    """Map mathematical/styled Unicode letters back to ASCII for search."""
+    out = []
+    for char in str(value or ""):
+        code = ord(char)
+        mapped = None
+        ranges = (
+            (0x1D400, 0x1D419, 65),
+            (0x1D41A, 0x1D433, 97),
+            (0x1D434, 0x1D44D, 65),
+            (0x1D44E, 0x1D467, 97),
+            (0x1D468, 0x1D481, 65),
+            (0x1D482, 0x1D49B, 97),
+            (0x1D4D0, 0x1D4E9, 65),
+            (0x1D4EA, 0x1D503, 97),
+            (0x1D5D4, 0x1D5ED, 65),
+            (0x1D5EE, 0x1D607, 97),
+            (0x1D63C, 0x1D655, 65),
+            (0x1D656, 0x1D66F, 97),
+            (0x1D670, 0x1D689, 65),
+            (0x1D68A, 0x1D6A3, 97),
+            (0xFF21, 0xFF3A, 65),
+            (0xFF41, 0xFF5A, 97),
+        )
+        for start, end, base in ranges:
+            if start <= code <= end:
+                mapped = chr(base + (code - start))
+                break
+        out.append(mapped if mapped else char)
+    return "".join(out)
 
 
 def save_inbox(records):
@@ -259,6 +297,7 @@ def build_catalog():
     inbox = load_inbox()
     state = load_state()
     neighbors = _adjacency(edges)
+    post_texts = load_post_texts()
 
     keywords = []
     decodes = []
@@ -280,13 +319,14 @@ def build_catalog():
         created_at = _node_created_at(node)
         connected = neighbors.get(name, [])
         linked_keywords = [item["id"] for item in connected if item["id"] in keyword_ids or item["id"].startswith("kw-")]
+        body = (node.get("text") or post_texts.get(tweet_id) or "").strip() or label
         # Keywords are appended after this loop in source order; resolve on a second pass.
         decodes.append({
             "id": name,
             "tweet_id": tweet_id,
             "label": label,
             "created_at": created_at,
-            "text": label,
+            "text": body,
             "xPostURL": node.get("xPostURL") or "",
             "xGraphicURL": node.get("xGraphicURL") or "",
             "media": (
@@ -312,7 +352,13 @@ def build_catalog():
         decode["keyword_ids"] = [item["id"] for item in decode["keywords"]]
         decode["keyword_labels"] = [keyword_labels[item["id"]] for item in decode["keywords"]]
         # Keep a flat list for search
-        text_hints = " ".join([decode["label"], *decode["keyword_labels"], *decode["edge_labels"]])
+        text_hints = " ".join([
+            decode["label"],
+            decode.get("text") or "",
+            fold_styled_text(decode.get("text") or ""),
+            *decode["keyword_labels"],
+            *decode["edge_labels"],
+        ])
         decode["search_text"] = text_hints.lower()
         extra = matched_keywords(text_hints)
         decode["detected_keywords"] = extra
@@ -358,7 +404,12 @@ def build_catalog():
             "score": score if score is not None else 0.0,
             "source": record.get("source") or "inbox",
             "reasons": record.get("reasons") or [],
-            "search_text": " ".join([label, record.get("text") or "", *detected]).lower(),
+            "search_text": " ".join([
+                label,
+                record.get("text") or "",
+                fold_styled_text(record.get("text") or ""),
+                *detected,
+            ]).lower(),
             "detected_keywords": detected,
         })
 

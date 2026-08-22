@@ -157,7 +157,7 @@ def test_flask_app():
             tests_passed &= print_test("Index returns HTML", b'html' in response.data.lower())
             tests_passed &= print_test("Explorer is home page", b'Decode Explorer' in response.data)
             tests_passed &= print_test("Explorer has X post panel", b'id="post-view"' in response.data)
-            tests_passed &= print_test("Explorer has post list", b'id="post-list"' in response.data)
+            tests_passed &= print_test("Explorer has post navigator", b'id="post-nav"' in response.data)
             tests_passed &= print_test("Explorer has insight overlay", b'id="insight-overlay"' in response.data)
             tests_passed &= print_test("Explorer has hub list", b'id="hub-list"' in response.data)
 

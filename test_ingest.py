@@ -84,7 +84,12 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(greatest["created_at"].startswith("2024-06"))
         self.assertTrue(greatest["xGraphicURL"])
         self.assertTrue(greatest["media"])
+        self.assertGreater(len(greatest.get("text") or ""), len(greatest["label"]))
         self.assertTrue(any(item["id"] == "kw-PATRIOTS" for item in catalog["keywords"]))
+
+    def test_fold_styled_text(self):
+        from ingest.catalog import fold_styled_text
+        self.assertIn("SOMETHING", fold_styled_text("𝗦𝗢𝗠𝗘𝗧𝗛𝗜𝗡𝗚"))
 
     def test_merge_inbox_skips_existing_and_adds_new(self):
         original = json.loads(Path("data/inbox.json").read_text())
@@ -142,11 +147,10 @@ class ExplorerRouteTests(unittest.TestCase):
         self.assertIn("Decode Explorer", body)
         self.assertIn("id=\"stage\"", body)
         self.assertIn("id=\"post-view\"", body)
-        self.assertIn("id=\"post-list\"", body)
+        self.assertIn("id=\"post-nav\"", body)
         self.assertIn("id=\"insight-overlay\"", body)
         self.assertIn("id=\"kw-legend\"", body)
         self.assertIn("id=\"signal-gauges\"", body)
-        self.assertIn("id=\"post-insights\"", body)
         self.assertIn("id=\"hub-list\"", body)
         self.assertIn("X POST", body)
 
@@ -161,6 +165,8 @@ class ExplorerRouteTests(unittest.TestCase):
         sample = with_media[0]
         self.assertTrue(sample["xGraphicURL"] or sample["media"][0]["url"])
         self.assertTrue(sample.get("xPostURL"))
+        long_text = [item for item in payload["decodes"] if len(item.get("text") or "") > 80]
+        self.assertGreaterEqual(len(long_text), 50)
 
     def test_archive_upload(self):
         original = json.loads(Path("data/inbox.json").read_text())

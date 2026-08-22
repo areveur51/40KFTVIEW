@@ -5,7 +5,8 @@ import sys
 
 from ingest import api
 from ingest.archive import load_archive_posts
-from ingest.catalog import build_catalog, merge_inbox, record_import_state, sha256_file
+from ingest.catalog import build_catalog, load_state, merge_inbox, record_import_state, sha256_file
+from ingest.texts import refresh_post_texts
 
 
 def cmd_archive(args):
@@ -68,6 +69,20 @@ def cmd_sync(args):
     return 0
 
 
+def cmd_texts(args):
+    stats = refresh_post_texts(force=args.force)
+    print(
+        f"Post texts: {stats['cached']}/{stats['wanted']} cached, "
+        f"{stats['fetched']} fetched"
+    )
+    if stats["errors"]:
+        print(f"Errors: {len(stats['errors'])}")
+        for item in stats["errors"][:8]:
+            print(f"  {item}")
+        return 1
+    return 0
+
+
 def cmd_rebuild(args):
     catalog = build_catalog()
     counts = catalog["counts"]
@@ -103,6 +118,10 @@ def build_parser():
     rebuild = sub.add_parser("rebuild", help="Print catalog counts from current files")
     rebuild.add_argument("--json", action="store_true")
     rebuild.set_defaults(func=cmd_rebuild)
+
+    texts = sub.add_parser("texts", help="Fetch and cache full X post text for catalog decodes")
+    texts.add_argument("--force", action="store_true", help="Refetch texts that are already cached")
+    texts.set_defaults(func=cmd_texts)
     return parser
 
 

@@ -21,9 +21,8 @@
     search: document.getElementById("search"),
     metrics: document.getElementById("metrics"),
     stage: document.getElementById("stage"),
-    postList: document.getElementById("post-list"),
+    postNav: document.getElementById("post-nav"),
     postView: document.getElementById("post-view"),
-    postInsights: document.getElementById("post-insights"),
     filterStrip: document.getElementById("filter-strip"),
     kwLegend: document.getElementById("kw-legend"),
     kpiGrid: document.getElementById("kpi-grid"),
@@ -482,29 +481,19 @@
     const rows = decodes
       .slice()
       .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
-      .slice(0, 40)
-      .map((item) => `
-        <button type="button" class="post-item${item.id === state.selected ? " active" : ""}" data-id="${esc(item.id)}">
-          <span class="dot ${esc(item.status)}"></span>
-          <span>${esc(item.label)}</span>
-          <span class="dim">${esc((item.created_at || "").slice(0, 10))}</span>
-        </button>
-      `)
+      .map((item) => {
+        const when = (item.created_at || "").slice(0, 10);
+        return `<option value="${esc(item.id)}"${item.id === state.selected ? " selected" : ""}>${esc(item.label)}${when ? ` · ${esc(when)}` : ""}</option>`;
+      })
       .join("");
-    els.postList.innerHTML = rows || `<div class="dim" style="padding:8px 12px">No matching posts</div>`;
+    els.postNav.innerHTML = rows || `<option value="">No matching posts</option>`;
+    if (state.selected) els.postNav.value = state.selected;
     state._listIds = decodes.map((item) => item.id).join("\0");
   }
 
   function markListSelection() {
-    els.postList.querySelectorAll(".post-item").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.id === state.selected);
-    });
-  }
-
-  function scrollSelectedIntoView() {
-    const active = els.postList.querySelector(".post-item.active");
-    if (active && typeof active.scrollIntoView === "function") {
-      active.scrollIntoView({ block: "nearest" });
+    if (state.selected && [...els.postNav.options].some((opt) => opt.value === state.selected)) {
+      els.postNav.value = state.selected;
     }
   }
 
@@ -512,6 +501,8 @@
     const ids = decodes.map((item) => item.id).join("\0");
     if (ids !== state._listIds) {
       renderPostList(decodes);
+    } else {
+      markListSelection();
     }
   }
 
@@ -672,15 +663,8 @@
     return rows.slice(0, 8);
   }
 
-  function renderRelated(item) {
-    if (!item) {
-      els.postInsights.innerHTML = `<p class="hint">Select a decode to see linked posts and shared themes.</p>`;
-      return;
-    }
-    const labels = (item.keyword_ids || []).map((id, i) => (
-      `<button type="button" class="tag${state.keywords.has(id) ? " active" : ""}" data-kw="${esc(id)}">${esc((item.keyword_labels || [])[i] || id)}</button>`
-    )).join("");
-    const edges = (item.edge_labels || []).slice(0, 4).map((label) => `<span class="tag">${esc(label)}</span>`).join("");
+  function relatedMarkup(item) {
+    if (!item) return "";
     const related = relatedDecodes(item);
     const rows = related.map((entry) => `
       <button type="button" class="related-item" data-id="${esc(entry.item.id)}">
@@ -688,9 +672,11 @@
         <span class="dim">${esc(entry.why === "edge" ? "LINK" : "THEME")}</span>
       </button>
     `).join("");
-    els.postInsights.innerHTML = `
-      <div class="path-chips">${labels || `<span class="dim">No theme links</span>`}${edges}</div>
-      ${rows || `<p class="hint">No neighboring decodes in the catalog.</p>`}
+    return `
+      <section class="post-insights">
+        <h2>RELATED / PATH</h2>
+        ${rows || `<p class="hint">No neighboring decodes in the catalog.</p>`}
+      </section>
     `;
   }
 
@@ -709,12 +695,9 @@
 
   function inspect(item) {
     const next = item ? item.id : null;
-    const changed = next !== state.selected;
     state.selected = next;
     markListSelection();
-    if (changed) scrollSelectedIntoView();
     renderGauges(item);
-    renderRelated(item);
     if (!item) {
       els.postView.innerHTML = `<p class="dim">Select a decode to open the full X post and media here.</p>`;
       return;
@@ -727,26 +710,35 @@
       if (!url) return "";
       return `<a href="${esc(url)}" target="_blank" rel="noreferrer"><img src="${esc(url)}" alt="${esc(item.label)}"></a>`;
     }).join("");
-    const body = item.text && item.text !== item.label ? item.text : item.label;
+    const body = (item.text || item.label || "").trim();
+    const title = (item.label || "").trim();
+    const titleKey = title.slice(0, 16).toLowerCase();
+    const showTitle = title && body && !body.toLowerCase().includes(titleKey);
     const when = (item.created_at || "").replace("T", " ").slice(0, 16) || "unknown";
+    const tags = (item.keyword_ids || []).map((id, i) => (
+      `<button type="button" class="tag${state.keywords.has(id) ? " active" : ""}" data-kw="${esc(id)}">${esc((item.keyword_labels || [])[i] || id)}</button>`
+    )).join("");
     els.postView.innerHTML = `
       <div class="post-head">
         <strong>@${esc((state.catalog && state.catalog.account) || "areveur51")}</strong>
         <span>${esc(when)}</span>
       </div>
+      ${showTitle ? `<h3 class="post-title">${esc(title)}</h3>` : ""}
+      <p class="post-text">${body ? esc(body) : `<span class="dim">No post text on this decode.</span>`}</p>
       <div class="post-media">${frames || `<p class="dim">No media on this post.</p>`}</div>
-      <p class="post-text">${esc(body)}</p>
       <div class="kv">
         <span class="dim">STATUS</span><span>${esc(item.status)}</span>
         <span class="dim">SCORE</span><span>${esc(item.score)}</span>
         <span class="dim">ID</span><span>${esc(item.tweet_id || "—")}</span>
       </div>
-      <div>${(item.keyword_ids || []).map((id, i) => `<button type="button" class="tag${state.keywords.has(id) ? " active" : ""}" data-kw="${esc(id)}">${esc((item.keyword_labels || [])[i] || id)}</button>`).join("")}</div>
+      <div class="path-chips">${tags}</div>
       <div class="post-actions">
         ${item.xPostURL ? `<a href="${esc(item.xPostURL)}" target="_blank" rel="noreferrer">OPEN ON X</a>` : ""}
         ${item.xGraphicURL ? `<a href="${esc(mediaUrl(item.xGraphicURL))}" target="_blank" rel="noreferrer">OPEN MEDIA</a>` : ""}
       </div>
+      ${relatedMarkup(item)}
     `;
+    els.postView.scrollTop = 0;
   }
 
   function showHover(item, event) {
@@ -826,11 +818,12 @@
     if (kpi && kpi.dataset.kpi === "all") return clearFilters();
   }
 
-  els.postList.addEventListener("click", onFilterClick);
+  els.postNav.addEventListener("change", (event) => {
+    inspect(findDecode(event.target.value));
+  });
   els.filterStrip.addEventListener("click", onFilterClick);
   els.kwLegend.addEventListener("click", onFilterClick);
   els.kpiGrid.addEventListener("click", onFilterClick);
-  els.postInsights.addEventListener("click", onFilterClick);
   els.postView.addEventListener("click", onFilterClick);
   els.hubs.addEventListener("click", onFilterClick);
   els.search.addEventListener("input", (event) => {

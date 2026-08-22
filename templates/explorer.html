@@ -57,15 +57,16 @@
         <div id="empty-state" class="empty hidden"></div>
       </main>
       <aside class="post-rail" aria-label="Selected X post">
-        <h2>X POST</h2>
-        <div id="post-list" class="post-list" aria-label="Visible decodes"></div>
+        <header class="post-rail-head">
+          <h2>X POST</h2>
+          <label class="post-nav-wrap">
+            <span class="sr-only">Visible decodes</span>
+            <select id="post-nav" aria-label="Visible decodes"></select>
+          </label>
+        </header>
         <div id="post-view" class="post-view">
           <p class="dim">Select a decode to open the full X post and media here.</p>
         </div>
-        <section class="post-insights" aria-label="Related decodes">
-          <h2>RELATED / PATH</h2>
-          <div id="post-insights"></div>
-        </section>
       </aside>
     </div>
 
