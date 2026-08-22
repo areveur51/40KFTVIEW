@@ -156,6 +156,8 @@ def test_flask_app():
             tests_passed &= print_test("Index route responds", response.status_code == 200)
             tests_passed &= print_test("Index returns HTML", b'html' in response.data.lower())
             tests_passed &= print_test("Explorer is home page", b'Decode Explorer' in response.data)
+            tests_passed &= print_test("Explorer has X post panel", b'id="post-view"' in response.data)
+            tests_passed &= print_test("Explorer has post list", b'id="post-list"' in response.data)
 
             catalog = client.get('/api/catalog')
             tests_passed &= print_test("Catalog API responds", catalog.status_code == 200)

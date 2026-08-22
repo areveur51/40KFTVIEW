@@ -142,6 +142,7 @@ class ExplorerRouteTests(unittest.TestCase):
         self.assertIn("Decode Explorer", body)
         self.assertIn("id=\"stage\"", body)
         self.assertIn("id=\"post-view\"", body)
+        self.assertIn("id=\"post-list\"", body)
         self.assertIn("X POST", body)
 
     def test_catalog_api(self):
@@ -150,6 +151,11 @@ class ExplorerRouteTests(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["account"], "areveur51")
         self.assertGreaterEqual(len(payload["decodes"]), 100)
+        with_media = [item for item in payload["decodes"] if item.get("media") or item.get("xGraphicURL")]
+        self.assertGreaterEqual(len(with_media), 50)
+        sample = with_media[0]
+        self.assertTrue(sample["xGraphicURL"] or sample["media"][0]["url"])
+        self.assertTrue(sample.get("xPostURL"))
 
     def test_archive_upload(self):
         original = json.loads(Path("data/inbox.json").read_text())

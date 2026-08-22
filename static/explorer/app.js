@@ -17,6 +17,7 @@
     search: document.getElementById("search"),
     metrics: document.getElementById("metrics"),
     stage: document.getElementById("stage"),
+    postList: document.getElementById("post-list"),
     postView: document.getElementById("post-view"),
     floatLabel: document.getElementById("float-label"),
     empty: document.getElementById("empty-state"),
@@ -301,21 +302,19 @@
       ctx.globalAlpha = 1;
     }
 
-    updateHud(decodes, selected);
+    updateHud(decodes);
     state._positions = positions;
     state._size = size;
     state._visible = decodes;
   }
 
-  function updateHud(decodes, selected) {
+  function updateHud(decodes) {
     const counts = state.catalog.counts;
     els.metrics.textContent = `DECODES ${counts.confirmed}   CANDIDATES ${counts.candidates}   SHOWING ${decodes.length}   EDGES ${counts.edges}`;
     drawTheme(decodes);
     drawRadar(decodes);
     drawHeat(decodes);
-    if (!selected && !state.selected) {
-      // keep existing inspector if already populated for an off-filter selection
-    }
+    syncPostList(decodes);
   }
 
   function drawTheme(decodes) {
@@ -435,8 +434,45 @@
     return url.replace(/name=\w+/, "name=large");
   }
 
+  function renderPostList(decodes) {
+    const rows = decodes
+      .slice()
+      .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+      .slice(0, 40)
+      .map((item) => `
+        <button type="button" class="post-item${item.id === state.selected ? " active" : ""}" data-id="${esc(item.id)}">
+          <span class="dot ${esc(item.status)}"></span>
+          <span>${esc(item.label)}</span>
+          <span class="dim">${esc((item.created_at || "").slice(0, 10))}</span>
+        </button>
+      `)
+      .join("");
+    els.postList.innerHTML = rows || `<div class="dim" style="padding:8px 12px">No matching posts</div>`;
+    state._listIds = decodes.map((item) => item.id).join("\0");
+  }
+
+  function markListSelection() {
+    els.postList.querySelectorAll(".post-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.id === state.selected);
+    });
+    const active = els.postList.querySelector(".post-item.active");
+    if (active && typeof active.scrollIntoView === "function") {
+      active.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function syncPostList(decodes) {
+    const ids = decodes.map((item) => item.id).join("\0");
+    if (ids !== state._listIds) {
+      renderPostList(decodes);
+    } else {
+      markListSelection();
+    }
+  }
+
   function inspect(item) {
     state.selected = item ? item.id : null;
+    markListSelection();
     if (!item) {
       els.postView.innerHTML = `<p class="dim">Select a decode to open the full X post and media here.</p>`;
       return;
@@ -489,7 +525,10 @@
     if (!response.ok) throw new Error("Could not load catalog");
     state.catalog = await response.json();
     log(`catalog loaded · ${state.catalog.counts.confirmed} confirmed`, "ok");
-    inspect(null);
+    const keep = state.selected && state.catalog.decodes.find((item) => item.id === state.selected);
+    const newest = [...state.catalog.decodes]
+      .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))[0];
+    inspect(keep || newest || null);
     renderLog();
     draw();
   }
@@ -518,6 +557,12 @@
     if (response.ok) await loadCatalog();
   }
 
+  els.postList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-id]");
+    if (!button) return;
+    const item = (state.catalog.decodes || []).find((decode) => decode.id === button.dataset.id);
+    inspect(item || null);
+  });
   els.search.addEventListener("input", (event) => {
     state.query = event.target.value;
     draw();
