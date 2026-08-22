@@ -11,6 +11,7 @@
     dragging: false,
     lastPtr: null,
     brush: null,
+    fitToken: "",
   };
 
   const els = {
@@ -141,7 +142,7 @@
     keywords.forEach((kw) => {
       const lane = laneIndex[kw.id];
       positions.set(kw.id, {
-        x: -80,
+        x: 20,
         y: (lane / Math.max(lanes.length - 1, 1)) * 720 - 360,
         kind: "keyword",
       });
@@ -153,7 +154,7 @@
       const hash = Array.from(item.id).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
       const jitter = ((hash % 17) - 8) * 4;
       positions.set(item.id, {
-        x: ((t - min) / span) * width,
+        x: 260 + ((t - min) / span) * width,
         y: (lane / Math.max(lanes.length - 1, 1)) * 720 - 360 + jitter,
         kind: "decode",
       });
@@ -186,7 +187,7 @@
 
   function hitTest(sx, sy, decodes, positions, size) {
     let best = null;
-    let bestDist = 16;
+    let bestDist = 22;
     for (const item of decodes) {
       const pos = positions.get(item.id);
       if (!pos) continue;
@@ -204,6 +205,7 @@
     if (!state.catalog) return;
     const decodes = visibleDecodes();
     const positions = layout(decodes);
+    maybeFit(decodes, positions);
     const size = resizeCanvas(els.stage, ctx);
     ctx.clearRect(0, 0, size.width, size.height);
 
@@ -259,6 +261,11 @@
       ctx.beginPath();
       ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
       ctx.fill();
+      if (active || decodes.length <= 24) {
+        ctx.fillStyle = item.status === "candidate" ? AMBER : GREEN;
+        ctx.font = "11px ui-sans-serif, system-ui";
+        ctx.fillText((item.label || "").slice(0, 28), screen.x + 10, screen.y + 4);
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -270,8 +277,7 @@
   }
 
   function drawHistogram() {
-    const decodes = state.catalog.decodes;
-    const months = buildMonths(decodes);
+    const months = buildMonths(visibleDecodes());
     const size = resizeCanvas(els.histogram, hctx);
     hctx.clearRect(0, 0, size.width, size.height);
     if (!months.length) return;
@@ -368,7 +374,41 @@
   }
 
   function fitCamera() {
-    state.camera = { x: 700, y: 0, scale: state.view === "timeline" ? 0.72 : 0.85 };
+    state.fitToken = "";
+    state.camera = { x: 820, y: 0, scale: state.view === "timeline" ? 0.68 : 0.85 };
+  }
+
+  function maybeFit(decodes, positions) {
+    const token = `${state.view}|${state.query}|${[...state.keywords].join(",")}|${state.range && state.range.join("-")}`;
+    if (token === state.fitToken) return;
+    state.fitToken = token;
+    if (!decodes.length) {
+      fitCamera();
+      state.fitToken = token;
+      return;
+    }
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    const ids = new Set(decodes.map((item) => item.id));
+    decodes.forEach((item) => (item.keyword_ids || []).forEach((id) => ids.add(id)));
+    for (const id of ids) {
+      const pos = positions.get(id);
+      if (!pos) continue;
+      minX = Math.min(minX, pos.x);
+      maxX = Math.max(maxX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxY = Math.max(maxY, pos.y);
+    }
+    if (!Number.isFinite(minX)) return;
+    state.camera.x = (minX + maxX) / 2;
+    state.camera.y = (minY + maxY) / 2;
+    const size = els.stage.getBoundingClientRect();
+    const pad = 160;
+    const scaleX = (size.width - pad) / Math.max(maxX - minX, 240);
+    const scaleY = (size.height - pad) / Math.max(maxY - minY, 240);
+    state.camera.scale = Math.max(0.35, Math.min(1.6, Math.min(scaleX, scaleY)));
   }
 
   async function loadCatalog() {
@@ -418,7 +458,7 @@
     state.view = "constellation";
     event.currentTarget.classList.add("active");
     document.getElementById("view-timeline").classList.remove("active");
-    state.camera = { x: 0, y: 0, scale: 0.85 };
+    state.fitToken = "";
     draw();
   });
   document.getElementById("btn-sync").addEventListener("click", () => {
@@ -436,26 +476,36 @@
 
   els.stage.addEventListener("pointerdown", (event) => {
     state.dragging = true;
-    state.lastPtr = { x: event.clientX, y: event.clientY, moved: false };
+    state.lastPtr = { x: event.clientX, y: event.clientY, originX: event.clientX, originY: event.clientY, moved: false };
   });
-  window.addEventListener("pointerup", (event) => {
-    if (state.dragging && state.lastPtr && !state.lastPtr.moved) {
+  els.stage.addEventListener("pointerup", (event) => {
+    if (!state.lastPtr) return;
+    const dist = Math.hypot(event.clientX - state.lastPtr.originX, event.clientY - state.lastPtr.originY);
+    if (dist < 8) {
       const rect = els.stage.getBoundingClientRect();
       const hit = hitTest(event.clientX - rect.left, event.clientY - rect.top, state._visible || [], state._positions || new Map(), state._size || { width: 0, height: 0 });
       inspect(hit);
     }
     state.dragging = false;
+    state.lastPtr = null;
+  });
+  window.addEventListener("pointerup", () => {
+    state.dragging = false;
+    state.brush = null;
   });
   window.addEventListener("pointermove", (event) => {
     if (state.dragging && state.lastPtr) {
       const dx = event.clientX - state.lastPtr.x;
       const dy = event.clientY - state.lastPtr.y;
-      if (Math.hypot(dx, dy) > 3) state.lastPtr.moved = true;
-      state.camera.x -= dx / state.camera.scale;
-      state.camera.y -= dy / state.camera.scale;
+      const fromOrigin = Math.hypot(event.clientX - state.lastPtr.originX, event.clientY - state.lastPtr.originY);
+      if (fromOrigin > 8) state.lastPtr.moved = true;
+      if (state.lastPtr.moved) {
+        state.camera.x -= dx / state.camera.scale;
+        state.camera.y -= dy / state.camera.scale;
+        draw();
+      }
       state.lastPtr.x = event.clientX;
       state.lastPtr.y = event.clientY;
-      draw();
       return;
     }
     const rect = els.stage.getBoundingClientRect();
@@ -478,12 +528,17 @@
     draw();
   }, { passive: false });
 
+  function monthIndexAt(x, width, months) {
+    const gap = 2;
+    const barW = Math.max(3, (width - months.length * gap) / months.length);
+    return Math.min(months.length - 1, Math.max(0, Math.floor(x / (barW + gap))));
+  }
+
   els.histogram.addEventListener("pointerdown", (event) => {
     const rect = els.histogram.getBoundingClientRect();
-    const x = event.clientX - rect.left;
     const months = state._months || [];
     if (!months.length) return;
-    const i = Math.min(months.length - 1, Math.max(0, Math.floor((x / rect.width) * months.length)));
+    const i = monthIndexAt(event.clientX - rect.left, rect.width, months);
     const month = months[i];
     state.brush = { start: i, current: i };
     state.range = [month.start, month.end];
@@ -493,13 +548,12 @@
     if (!state.brush) return;
     const rect = els.histogram.getBoundingClientRect();
     const months = state._months || [];
-    const i = Math.min(months.length - 1, Math.max(0, Math.floor(((event.clientX - rect.left) / rect.width) * months.length)));
+    const i = monthIndexAt(event.clientX - rect.left, rect.width, months);
     const a = months[Math.min(state.brush.start, i)];
     const b = months[Math.max(state.brush.start, i)];
     state.range = [a.start, b.end];
     draw();
   });
-  window.addEventListener("pointerup", () => { state.brush = null; });
   window.addEventListener("resize", draw);
 
   loadCatalog().catch((err) => {
