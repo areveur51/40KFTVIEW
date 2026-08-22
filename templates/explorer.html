@@ -42,8 +42,11 @@
         <div id="hover-card" class="hover-card hidden"></div>
         <div id="empty-state" class="empty hidden"></div>
       </div>
-      <aside id="inspector" class="inspector">
-        <p class="muted">Select a decode to inspect it. Hover a node to preview. Edges only draw for the active neighborhood so the map stays readable as history grows.</p>
+      <aside class="inspector">
+        <div id="inspector">
+          <p class="muted">Select a decode from the list or the map. Edges only draw for the active neighborhood so the map stays readable as history grows.</p>
+        </div>
+        <div id="results" class="results" aria-label="Visible decodes"></div>
       </aside>
     </main>
 

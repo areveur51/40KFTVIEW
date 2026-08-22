@@ -21,6 +21,7 @@
     stage: document.getElementById("stage"),
     histogram: document.getElementById("histogram"),
     inspector: document.getElementById("inspector"),
+    results: document.getElementById("results"),
     hover: document.getElementById("hover-card"),
     empty: document.getElementById("empty-state"),
     rangeLabel: document.getElementById("range-label"),
@@ -304,6 +305,23 @@
     const max = state.range ? new Date(state.range[1]) : new Date(state.catalog.range.max || Date.now());
     const fmt = (d) => Number.isNaN(d.getTime()) ? "—" : d.toISOString().slice(0, 10);
     els.rangeLabel.textContent = `${fmt(min)} → ${fmt(max)}  ·  @${state.catalog.account}`;
+    renderResults(decodes);
+  }
+
+  function renderResults(decodes) {
+    const rows = decodes
+      .slice()
+      .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+      .slice(0, 80)
+      .map((item) => `
+        <button type="button" class="result${item.id === state.selected ? " active" : ""}" data-id="${item.id}">
+          <span class="dot ${item.status}"></span>
+          <span>${item.label}</span>
+          <span class="muted">${(item.created_at || "").slice(0, 10)}</span>
+        </button>
+      `)
+      .join("");
+    els.results.innerHTML = rows || `<p class="muted">No matching decodes.</p>`;
   }
 
   function renderChips() {
@@ -326,7 +344,7 @@
   function inspect(item) {
     state.selected = item ? item.id : null;
     if (!item) {
-      els.inspector.innerHTML = `<p class="muted">Select a decode to inspect it. Hover a node to preview. Edges only draw for the active neighborhood so the map stays readable as history grows.</p>`;
+      els.inspector.innerHTML = `<p class="muted">Select a decode from the list or the map. Edges only draw for the active neighborhood so the map stays readable as history grows.</p>`;
       draw();
       return;
     }
@@ -443,6 +461,12 @@
     if (response.ok) await loadCatalog();
   }
 
+  els.results.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-id]");
+    if (!button) return;
+    const item = (state.catalog.decodes || []).find((decode) => decode.id === button.dataset.id);
+    inspect(item || null);
+  });
   els.search.addEventListener("input", (event) => {
     state.query = event.target.value;
     draw();

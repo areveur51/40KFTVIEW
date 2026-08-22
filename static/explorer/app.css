@@ -118,6 +118,9 @@ button, .file-btn { cursor: pointer; }
   border-left: 1px solid var(--line);
   padding: 16px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .inspector img {
@@ -130,6 +133,37 @@ button, .file-btn { cursor: pointer; }
 .inspector h2 { margin: 12px 0 6px; font-size: 18px; }
 .inspector a { color: var(--green); }
 .muted { color: var(--muted); }
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.result {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #101018;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.result.active { border-color: var(--green); }
+.result .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.result .dot.candidate { background: var(--amber); }
 
 .kv { display: grid; grid-template-columns: 92px 1fr; gap: 4px 8px; margin: 12px 0; }
 .tag {
