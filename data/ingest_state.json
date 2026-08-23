@@ -1,6 +1,40 @@
 {
-  "last_sync_at": "",
-  "last_source": "",
-  "newest_tweet_id": "",
-  "api_available": false
+  "last_sync_at": "2026-08-23T18:56:22.533742Z",
+  "last_source": "archive",
+  "newest_tweet_id": "2027510502792782171",
+  "api_available": false,
+  "last_checked_at": "2026-08-23T18:56:22.807473Z",
+  "archive_posts": 35,
+  "archive_decodes": 0,
+  "last_archive_sha256": "876bd5ac60b80eedc5c9c0ae645ff201ab742db7889ea6fe7bb1bcbc7454b006",
+  "fetched": 35,
+  "events": [
+    {
+      "at": "2026-08-23T18:56:22.533742Z",
+      "source": "archive",
+      "added": 270,
+      "updated": 0,
+      "unchanged": 0,
+      "skipped": 2,
+      "fetched": 36943
+    },
+    {
+      "at": "2026-08-23T18:56:22.723655Z",
+      "source": "archive",
+      "added": 0,
+      "updated": 0,
+      "unchanged": 0,
+      "skipped": 0,
+      "fetched": 92
+    },
+    {
+      "at": "2026-08-23T18:56:22.807473Z",
+      "source": "archive",
+      "added": 0,
+      "updated": 0,
+      "unchanged": 0,
+      "skipped": 0,
+      "fetched": 35
+    }
+  ]
 }

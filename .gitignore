@@ -6,6 +6,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 ENV/
 *.egg-info/
 dist/
@@ -27,6 +28,8 @@ index.html
 templates/index_orig.html
 attached_assets/
 screenshots/
+twitter-*.zip
+*.zip
 
 # OS
 .DS_Store
@@ -39,3 +42,15 @@ replit.nix
 .upm/
 .cache/
 .pythonlibs/
+
+# CommandCenter / hub local
+.env
+.env.example
+*.pid
+*.log
+app.pack.yaml
+40kftviewctl.sh
+tls/
+app/
+media/
+scripts/

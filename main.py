@@ -553,5 +553,18 @@ def api_ingest_archive():
     })
 
 
+@app.route('/api/health')
+@app.route('/health')
+def health():
+    """CommandCenter health probe — JSON body must include ok=true."""
+    return jsonify({
+        'ok': True,
+        'service': os.environ.get('APP_ID', '40kftview'),
+        'ts': datetime.now().isoformat(),
+    })
+
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', '5000'))
+    host = os.environ.get('HOST', '0.0.0.0')
+    app.run(host=host, port=port, debug=True)
